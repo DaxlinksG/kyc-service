@@ -41,6 +41,9 @@ COPY --from=admin-build /app/packages/api/public ./packages/api/public
 # Build TypeScript
 RUN npm run build --workspace=packages/api
 
+# Copy SQL migrations (not emitted by tsc)
+RUN cp -r packages/api/src/db/migrations packages/api/dist/db/migrations
+
 # Prune devDeps after build
 RUN npm prune --workspaces --omit=dev
 
