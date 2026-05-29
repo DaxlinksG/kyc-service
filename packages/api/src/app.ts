@@ -55,9 +55,11 @@ export async function buildApp() {
   // Serve admin dashboard (built static files)
   const publicDir = join(__dirname, '../public');
   if (existsSync(publicDir)) {
+    // Redirect /admin → /admin/ so relative asset paths resolve correctly
+    app.get('/admin', (_req, reply) => reply.redirect('/admin/'));
     await app.register(staticFiles, {
       root: publicDir,
-      prefix: '/admin',
+      prefix: '/admin/',
     });
   }
 
