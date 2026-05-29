@@ -16,6 +16,56 @@ const sessionService = new SessionService();
 export default async function documentRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/sessions/:id/documents', {
     preHandler: [(app as any).verifySessionAuth],
+    schema: {
+      tags: ['Documents'],
+      summary: 'Upload an identity document',
+      description: `Upload a photo of the user's identity document. The service will extract text via OCR, parse the MRZ (Machine Readable Zone), and validate document authenticity.
+
+**Accepted document types:** PASSPORT, NATIONAL_ID, DRIVERS_LICENSE
+
+**For NATIONAL_ID and DRIVERS_LICENSE:** Upload the front first, then call this endpoint again with \`side=BACK\`.
+
+**Accepted file formats:** JPEG, PNG, PDF — max 10 MB.
+
+**Auth:** Use the \`session_token\` from \`POST /v1/sessions\` — not your API key.`,
+      security: [{ SessionToken: [] }],
+      consumes: ['multipart/form-data'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['file', 'document_type'],
+        properties: {
+          file: { type: 'string', format: 'binary', description: 'Document image (JPEG, PNG, or PDF)' },
+          document_type: {
+            type: 'string',
+            enum: ['PASSPORT', 'NATIONAL_ID', 'DRIVERS_LICENSE'],
+            description: 'Type of identity document',
+          },
+          side: {
+            type: 'string',
+            enum: ['FRONT', 'BACK'],
+            default: 'FRONT',
+            description: 'Required for NATIONAL_ID and DRIVERS_LICENSE — upload front first, then back.',
+          },
+        },
+      },
+      response: {
+        202: {
+          description: 'Document accepted and queued for processing',
+          type: 'object',
+          properties: {
+            document_id: { type: 'string', example: 'doc_xyz789' },
+            status: { type: 'string', example: 'processing' },
+          },
+        },
+      },
+    },
   }, async (request, reply) => {
     const sessionId = request.params.id;
     const session = sessionService.getById(sessionId);

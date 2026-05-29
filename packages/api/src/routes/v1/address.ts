@@ -16,6 +16,52 @@ const sessionService = new SessionService();
 export default async function addressRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/sessions/:id/address', {
     preHandler: [(app as any).verifySessionAuth],
+    schema: {
+      tags: ['Documents'],
+      summary: 'Upload proof of address',
+      description: `Upload a document that proves the user's current residential address. The service will extract the name and address via OCR and match the name against the identity document.
+
+**Accepted document types:** UTILITY_BILL, BANK_STATEMENT, GOVERNMENT_LETTER
+
+**Requirements:**
+- Document must be dated within the last **90 days**
+- Name on the document must match the name on the ID
+
+**Accepted formats:** JPEG, PNG, PDF — max 10 MB.
+
+**Auth:** Use the \`session_token\` — not your API key.`,
+      security: [{ SessionToken: [] }],
+      consumes: ['multipart/form-data'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['file', 'document_type'],
+        properties: {
+          file: { type: 'string', format: 'binary', description: 'Address document (JPEG, PNG, or PDF)' },
+          document_type: {
+            type: 'string',
+            enum: ['UTILITY_BILL', 'BANK_STATEMENT', 'GOVERNMENT_LETTER'],
+            description: 'Type of address document',
+          },
+        },
+      },
+      response: {
+        202: {
+          description: 'Address document accepted and queued for processing',
+          type: 'object',
+          properties: {
+            address_id: { type: 'string', example: 'adr_abc123' },
+            status: { type: 'string', example: 'processing' },
+          },
+        },
+      },
+    },
   }, async (request, reply) => {
     const sessionId = request.params.id;
     const session = sessionService.getById(sessionId);

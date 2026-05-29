@@ -3,6 +3,8 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import staticFiles from '@fastify/static';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
@@ -28,7 +30,7 @@ export async function buildApp() {
   // CORS
   await app.register(cors, {
     origin: env.CORS_ORIGINS.split(',').map((o) => o.trim()),
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
   // Multipart (file uploads)
@@ -44,6 +46,76 @@ export async function buildApp() {
     errorResponseBuilder: () => ({
       error: { code: 'RATE_LIMITED', message: 'Too many requests' },
     }),
+  });
+
+  // OpenAPI / Swagger docs
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'KYC Verification API',
+        description: `
+## Overview
+The KYC Verification API lets you verify the identity of your users through document scanning, liveness detection, and address verification — all in one flow.
+
+## Authentication
+All endpoints (except \`/health\`) require an **API Key** passed as a Bearer token:
+\`\`\`
+Authorization: Bearer kyc_live_your_api_key
+\`\`\`
+
+For document/selfie/address uploads from the **frontend**, use a short-lived **Session Token** instead:
+\`\`\`
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+\`\`\`
+
+Session tokens are obtained by creating a session from your **server** and passing the token to your frontend. Never expose your API key in browser code.
+
+## Verification Flow
+1. **Server** calls \`POST /v1/sessions\` → receives \`session_token\`
+2. **Frontend** (or widget) uploads documents using \`session_token\`
+3. **Server** polls \`GET /v1/sessions/:id\` or receives a **webhook** when processing completes
+
+## Decisions
+| Decision | Meaning |
+|----------|---------|
+| \`approved\` | All checks passed — user is verified |
+| \`rejected\` | One or more checks failed |
+| \`manual_review\` | Borderline result — awaiting admin decision |
+        `.trim(),
+        version: '1.0.0',
+        contact: {
+          name: 'KYC Service Support',
+          url: 'https://kyc.zeehfi.ca/admin',
+        },
+      },
+      servers: [{ url: 'https://kyc.zeehfi.ca', description: 'Production' }],
+      components: {
+        securitySchemes: {
+          ApiKey: {
+            type: 'http',
+            scheme: 'bearer',
+            description: 'Your merchant API key (`kyc_live_...`). Use for all server-side calls.',
+          },
+          SessionToken: {
+            type: 'http',
+            scheme: 'bearer',
+            description: 'Short-lived session token (`eyJ...`). Use only for document uploads from the frontend.',
+          },
+        },
+      },
+      tags: [
+        { name: 'Sessions', description: 'Create and manage KYC verification sessions' },
+        { name: 'Documents', description: 'Upload identity documents, selfies, and address proof' },
+        { name: 'Webhooks', description: 'Register endpoints to receive real-time verification results' },
+        { name: 'Health', description: 'Service health check' },
+      ],
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list', deepLinking: true },
+    staticCSP: false,
   });
 
   // Auth plugin

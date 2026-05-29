@@ -14,6 +14,49 @@ const sessionService = new SessionService();
 export default async function selfieRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/sessions/:id/selfie', {
     preHandler: [(app as any).verifySessionAuth],
+    schema: {
+      tags: ['Documents'],
+      summary: 'Upload a selfie',
+      description: `Upload a photo of the user's face. The service will:
+- Detect a face in the image
+- Run a **passive liveness check** (detects photo/screen attacks using facial landmark geometry)
+- **Match the face** against the ID document uploaded in the previous step
+
+**Tips for best results:**
+- Good lighting, no sunglasses
+- Face clearly visible and centred
+- Taken in real time (not a photo of a photo)
+
+**Accepted formats:** JPEG, PNG — max 10 MB. PDF is not accepted.
+
+**Auth:** Use the \`session_token\` — not your API key.`,
+      security: [{ SessionToken: [] }],
+      consumes: ['multipart/form-data'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
+        },
+      },
+      body: {
+        type: 'object',
+        required: ['file'],
+        properties: {
+          file: { type: 'string', format: 'binary', description: 'Selfie image (JPEG or PNG)' },
+        },
+      },
+      response: {
+        202: {
+          description: 'Selfie accepted and queued for processing',
+          type: 'object',
+          properties: {
+            selfie_id: { type: 'string', example: 'slf_abc123' },
+            status: { type: 'string', example: 'processing' },
+          },
+        },
+      },
+    },
   }, async (request, reply) => {
     const sessionId = request.params.id;
     const session = sessionService.getById(sessionId);
