@@ -19,7 +19,7 @@ export class DocumentService {
     if (!doc) throw new Error(`Document not found: ${documentId}`);
 
     try {
-      let imageBuffer = readFileSync(join(env.STORAGE_PATH, doc.storage_path));
+      let imageBuffer: Buffer = readFileSync(join(env.STORAGE_PATH, doc.storage_path));
 
       // Convert PDF to image if needed
       if (doc.storage_path.endsWith('.pdf')) {

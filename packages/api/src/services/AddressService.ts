@@ -18,7 +18,7 @@ export class AddressService {
     if (!check) throw new Error(`Address check not found: ${addressId}`);
 
     try {
-      let imageBuffer = readFileSync(join(env.STORAGE_PATH, check.storage_path));
+      let imageBuffer: Buffer = readFileSync(join(env.STORAGE_PATH, check.storage_path));
 
       if (check.storage_path.endsWith('.pdf')) {
         imageBuffer = await pdfToImage(imageBuffer);
