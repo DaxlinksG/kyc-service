@@ -19,6 +19,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export async function buildApp() {
   const app = Fastify({
+    ajv: {
+      customOptions: { keywords: ['example'] },
+    },
     logger: {
       level: env.NODE_ENV === 'test' ? 'silent' : 'info',
       transport: env.NODE_ENV === 'development'
