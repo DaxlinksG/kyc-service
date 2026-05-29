@@ -1,0 +1,27 @@
+{
+  "name": "@kyc/sdk",
+  "version": "1.0.0",
+  "description": "Official SDK for the KYC verification service",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}

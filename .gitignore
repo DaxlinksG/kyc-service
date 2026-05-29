@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts.map
+packages/api/storage/
+packages/api/kyc.db
+packages/api/kyc.db-shm
+packages/api/kyc.db-wal
+.env

@@ -1,0 +1,39 @@
+{
+  "name": "@kyc/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "@fastify/rate-limit": "^9.1.0",
+    "better-sqlite3": "^9.4.3",
+    "canvas": "^2.11.2",
+    "face-api.js": "^0.22.2",
+    "fastify": "^4.27.0",
+    "fastify-plugin": "^4.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "nanoid": "^5.0.7",
+    "pino-pretty": "^11.0.0",
+    "sharp": "^0.33.3",
+    "tesseract.js": "^5.1.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.12.0",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}
