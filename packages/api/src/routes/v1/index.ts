@@ -5,6 +5,7 @@ import selfieRoutes from './selfie.js';
 import addressRoutes from './address.js';
 import webhookRoutes from './webhooks.js';
 import apiKeyRoutes from './apiKeys.js';
+import adminRoutes from './admin.js';
 
 export default async function v1Routes(app: FastifyInstance) {
   app.register(sessionRoutes);
@@ -13,4 +14,5 @@ export default async function v1Routes(app: FastifyInstance) {
   app.register(addressRoutes);
   app.register(webhookRoutes);
   app.register(apiKeyRoutes);
+  app.register(adminRoutes);
 }
