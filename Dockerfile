@@ -24,11 +24,11 @@ RUN apk add --no-cache \
     cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev \
     vips-dev
 
-# Install only production deps
+# Install all deps (need devDeps for tsc)
 COPY package.json package-lock.json ./
 COPY packages/api/package.json ./packages/api/
 COPY packages/sdk/package.json ./packages/sdk/
-RUN npm install --workspaces --omit=dev
+RUN npm install --workspaces
 
 # Copy source
 COPY packages/api ./packages/api
@@ -40,6 +40,9 @@ COPY --from=admin-build /app/packages/api/public ./packages/api/public
 
 # Build TypeScript
 RUN npm run build --workspace=packages/api
+
+# Prune devDeps after build
+RUN npm prune --workspaces --omit=dev
 
 # Create storage directory
 RUN mkdir -p /data/storage /data/db
