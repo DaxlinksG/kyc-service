@@ -1,0 +1,44 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            # Pull latest code
+            cd /opt/kyc-service
+            git pull origin main
+
+            # Rebuild and restart containers (zero-downtime)
+            docker compose build --no-cache api
+            docker compose up -d --no-deps api
+            docker compose up -d nginx certbot
+
+            # Run migrations
+            docker compose exec -T api node packages/api/dist/db/migrate.js
+
+            # Verify health
+            sleep 5
+            curl -sf http://localhost:3000/health || (echo "Health check failed!" && exit 1)
+
+            echo "✅ Deployment successful"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "Deployment failed — check GitHub Actions logs"

@@ -2,13 +2,18 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
-import fp from 'fastify-plugin';
+import staticFiles from '@fastify/static';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import { env } from './config/env.js';
 import { MAX_FILE_SIZE_BYTES } from './config/constants.js';
 import authPlugin from './plugins/auth.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import v1Routes from './routes/v1/index.js';
 import healthRoutes from './routes/internal/health.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export async function buildApp() {
   const app = Fastify({
@@ -46,6 +51,15 @@ export async function buildApp() {
 
   // Error handler
   await app.register(errorHandlerPlugin);
+
+  // Serve admin dashboard (built static files)
+  const publicDir = join(__dirname, '../public');
+  if (existsSync(publicDir)) {
+    await app.register(staticFiles, {
+      root: publicDir,
+      prefix: '/admin',
+    });
+  }
 
   // Routes
   await app.register(healthRoutes);
