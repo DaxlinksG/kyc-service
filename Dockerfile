@@ -41,6 +41,9 @@ COPY packages/api ./packages/api
 COPY packages/sdk ./packages/sdk
 COPY tsconfig.base.json ./
 
+# Copy face-api model files into dist location
+RUN mkdir -p packages/api/dist/models/face-api
+
 # Copy built admin dashboard into API's public folder
 COPY --from=admin-build /app/packages/api/public ./packages/api/public
 
@@ -49,6 +52,9 @@ RUN npm run build --workspace=packages/api
 
 # Copy SQL migrations (not emitted by tsc)
 RUN cp -r packages/api/src/db/migrations packages/api/dist/db/migrations
+
+# Copy face-api models into dist (needed at runtime)
+RUN cp -r packages/api/models packages/api/dist/models
 
 # Prune devDeps after build
 RUN npm prune --workspaces --omit=dev
