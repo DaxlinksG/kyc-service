@@ -105,7 +105,7 @@ Zero UI work. Add one script tag and a custom element to your page.
     if (decision === 'approved') {
       window.location.href = '/dashboard';
     } else if (decision === 'manual_review') {
-      showMessage('Your documents are under review. We'll notify you shortly.');
+      showMessage("Your documents are under review. We'll notify you shortly.");
     } else {
       showMessage('Verification was unsuccessful. Please try again or contact support.');
     }
@@ -117,7 +117,45 @@ Zero UI work. Add one script tag and a custom element to your page.
 </script>
 ```
 
-The widget handles the full multi-step flow: ID upload → selfie → address → result screen.
+#### What the widget does — step by step
+
+The widget is a guided 3-step flow with live camera capture built in:
+
+**Step 1 — ID Document**
+- Opens the device's rear camera automatically
+- Shows a card-shaped frame overlay — user aligns their ID inside it
+- Frame turns green when the document is detected
+- 3-second countdown, then auto-captures a photo
+- Retake button if the capture isn't clear
+- Falls back to file upload if camera is unavailable or denied
+
+**Step 2 — Selfie**
+- Opens the front camera with a face-oval overlay
+- Mirror effect so it feels natural to the user
+- Oval turns green when a face is detected
+- 3-second countdown, captures and uploads
+- Retake option
+- Falls back to file/camera picker on mobile if WebRTC is unavailable
+
+**Step 3 — Proof of Address**
+- User selects document type (Utility Bill, Bank Statement, Government Letter)
+- Drag & drop or click to upload — JPEG, PNG, PDF accepted
+- Must be dated within 90 days
+
+**Result screen**
+- Polls for the decision automatically (every 3 seconds, up to 2 minutes)
+- Shows a clear result: ✅ Approved · ❌ Rejected · ⏳ Under Review · ⚠️ Expired
+- Fires the `kyc:complete` event with the decision so your code can react
+
+#### Browser requirements
+
+| Feature | Required for |
+|---------|-------------|
+| `getUserMedia` (WebRTC) | Live camera capture |
+| JavaScript ES2020 | Widget core |
+| Shadow DOM | Widget isolation (no CSS conflicts) |
+
+All modern browsers (Chrome 80+, Firefox 75+, Safari 14+, Edge 80+) are supported. On older browsers the widget falls back to file upload for all steps.
 
 ---
 

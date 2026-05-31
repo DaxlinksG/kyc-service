@@ -134,7 +134,28 @@ sudo docker logs -f kyc-service-api-1
 sudo docker exec kyc-service-nginx-1 nginx -s reload
 ```
 
+## Widget
+- Built as vanilla web component (`<kyc-widget>`) with shadow DOM, no framework
+- Source: `packages/widget/src/`
+- Built output: `packages/widget/dist/kyc-widget.iife.js`
+- Served at: `https://kyc.zeehfi.ca/widget/kyc-widget.js`
+- Dockerfile builds it in `admin-build` stage and copies to `packages/api/public/widget/`
+- API serves `/widget/` as a second static route via `@fastify/static` with `decorateReply: false`
+
+### Widget flow (3 steps + result)
+1. **ID Document** — rear camera, card frame overlay, green when detected, 3s countdown capture, upload fallback
+2. **Selfie** — front camera, face oval overlay, mirrored preview, 3s countdown, upload fallback
+3. **Address** — document type selector + drag & drop / file upload (PDF supported)
+4. **Result** — polls every 3s up to 2 min, fires `kyc:complete` event with decision
+
+### Widget events
+```js
+widget.addEventListener('kyc:complete', (e) => { /* e.detail.decision */ });
+widget.addEventListener('kyc:error',    (e) => { /* e.detail.message  */ });
+```
+
 ## Client Documentation
 - **Interactive docs**: `https://kyc.zeehfi.ca/docs` (Swagger UI)
 - **Developer guide**: `INTEGRATION.md` in repo root
 - Clients receive a `kyc_live_...` API key created via `POST /v1/admin/merchants` using master key
+- To onboard a new client: create merchant via admin dashboard or `POST /v1/admin/merchants`, then `POST /v1/api-keys`
