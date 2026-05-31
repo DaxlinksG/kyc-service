@@ -54,7 +54,7 @@ RUN npm run build --workspace=packages/api
 RUN cp -r packages/api/src/db/migrations packages/api/dist/db/migrations
 
 # Copy face-api models into dist (needed at runtime)
-RUN cp -r packages/api/models packages/api/dist/models
+RUN cp -r packages/api/models/face-api packages/api/dist/models/face-api
 
 # Prune devDeps after build
 RUN npm prune --workspaces --omit=dev
