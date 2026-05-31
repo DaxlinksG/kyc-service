@@ -134,10 +134,10 @@ export class StepManager {
         </div>
       </div>
       <div class="upload-zone" id="doc-upload" style="display:none">
-        <input type="file" id="doc-file" accept="image/*,.pdf">
+        <input type="file" id="doc-file" accept="image/*">
         <div class="upload-icon">📄</div>
         <p>Click to upload or drag & drop</p>
-        <p style="font-size:12px;margin-top:4px;color:var(--kyc-text-muted)">JPG, PNG, WebP or PDF · max 20MB</p>
+        <p style="font-size:12px;margin-top:4px;color:var(--kyc-text-muted)">JPG, PNG or WebP · max 20MB</p>
         <div class="file-selected" id="doc-filename"></div>
       </div>
       <div id="doc-error"></div>
@@ -531,10 +531,10 @@ export class StepManager {
           </div>`).join('')}
       </div>
       <div class="upload-zone" id="addr-zone">
-        <input type="file" id="addr-file" accept="image/*,.pdf">
+        <input type="file" id="addr-file" accept="image/*">
         <div class="upload-icon">📄</div>
         <p>Click to upload or drag & drop</p>
-        <p style="font-size:12px;margin-top:4px;color:var(--kyc-text-muted)">JPG, PNG, WebP or PDF · max 20MB</p>
+        <p style="font-size:12px;margin-top:4px;color:var(--kyc-text-muted)">JPG, PNG or WebP · max 20MB</p>
         <div class="file-selected" id="addr-filename"></div>
       </div>
       <div id="addr-error"></div>

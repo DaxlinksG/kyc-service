@@ -8,12 +8,9 @@ export async function validateImageFile(buffer: Buffer, declaredMime?: string): 
   }
 
   const detectedType = detectMimeType(buffer);
-  if (!detectedType) {
-    throw new FileValidationError('Unrecognized file type. Only JPEG, PNG, WebP, and PDF are allowed.');
+  if (!detectedType || detectedType === 'application/pdf') {
+    throw new FileValidationError('Unrecognized file type. Only JPEG, PNG, and WebP images are allowed.');
   }
-
-  // PDFs are not image-processable by sharp — skip dimension check
-  if (detectedType === 'application/pdf') return;
 
   let metadata: sharp.Metadata;
   try {
@@ -55,7 +52,7 @@ function detectMimeType(buffer: Buffer): string | null {
 
 export function sanitizeFilename(ext: string): string {
   // Only allow safe extensions; always generate a new UUID-based name
-  const safe = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+  const safe = ['jpg', 'jpeg', 'png', 'webp'];
   const normalized = ext.toLowerCase().replace(/^\./, '');
   return safe.includes(normalized) ? normalized : 'bin';
 }

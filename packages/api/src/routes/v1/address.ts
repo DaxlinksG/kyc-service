@@ -27,7 +27,7 @@ export default async function addressRoutes(app: FastifyInstance) {
 - Document must be dated within the last **90 days**
 - Name on the document must match the name on the ID
 
-**Accepted formats:** JPEG, PNG, PDF — max 10 MB.
+**Accepted formats:** JPEG, PNG, WebP — max 10 MB.
 
 **Auth:** Use the \`session_token\` — not your API key.`,
       security: [{ SessionToken: [] }],
@@ -72,7 +72,7 @@ export default async function addressRoutes(app: FastifyInstance) {
     }).parse(formFields);
 
     const addressId = `adr_${nanoid(12)}`;
-    const ext = fileBuffer[0] === 0x25 ? 'pdf' : 'jpg';
+    const ext = 'jpg';
     const relativePath = join(session.merchant_id, sessionId, `${addressId}.${ext}`);
     const absoluteDir = join(env.STORAGE_PATH, session.merchant_id, sessionId);
     mkdirSync(absoluteDir, { recursive: true });
