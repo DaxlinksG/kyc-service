@@ -18,18 +18,27 @@ const webhookService = new WebhookService();
 
 export function registerAllProcessors(): void {
   registerProcessor('PROCESS_DOCUMENT', async ({ documentId, sessionId }) => {
-    await documentService.process(documentId as string);
-    checkAndScoreIfReady(sessionId as string);
+    try {
+      await documentService.process(documentId as string);
+    } finally {
+      checkAndScoreIfReady(sessionId as string);
+    }
   });
 
   registerProcessor('PROCESS_SELFIE', async ({ selfieId, sessionId }) => {
-    await livenessService.process(selfieId as string, sessionId as string);
-    checkAndScoreIfReady(sessionId as string);
+    try {
+      await livenessService.process(selfieId as string, sessionId as string);
+    } finally {
+      checkAndScoreIfReady(sessionId as string);
+    }
   });
 
   registerProcessor('PROCESS_ADDRESS', async ({ addressId, sessionId }) => {
-    await addressService.process(addressId as string);
-    checkAndScoreIfReady(sessionId as string);
+    try {
+      await addressService.process(addressId as string);
+    } finally {
+      checkAndScoreIfReady(sessionId as string);
+    }
   });
 
   registerProcessor('SCORE_SESSION', async ({ sessionId }) => {
