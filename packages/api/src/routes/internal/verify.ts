@@ -31,23 +31,28 @@ const HTML = (sessionToken: string, apiBase: string) => `<!DOCTYPE html>
     session-token="${sessionToken}"
     api-base-url="${apiBase}"
   ></kyc-widget>
-  <div class="powered">Secured by KYC Service</div>
+  <div class="powered">Powered by Usezeeh</div>
   <script src="${apiBase}/widget/kyc-widget.js"></script>
   <script>
     const widget = document.querySelector('kyc-widget');
+
     widget.addEventListener('kyc:complete', (e) => {
       const { decision } = e.detail;
-      // Redirect or post message to parent frame
-      if (window.opener) {
-        window.opener.postMessage({ type: 'kyc:complete', decision }, '*');
-      }
-      if (window.parent !== window) {
-        window.parent.postMessage({ type: 'kyc:complete', decision }, '*');
-      }
+      // Notify parent frame / opener
+      if (window.opener) window.opener.postMessage({ type: 'kyc:complete', decision }, '*');
+      if (window.parent !== window) window.parent.postMessage({ type: 'kyc:complete', decision }, '*');
+      // Result is already shown inside the widget — nothing else to do
     });
+
     widget.addEventListener('kyc:error', (e) => {
+      console.error('[KYC] error:', e.detail.message);
       if (window.opener) window.opener.postMessage({ type: 'kyc:error', message: e.detail.message }, '*');
       if (window.parent !== window) window.parent.postMessage({ type: 'kyc:error', message: e.detail.message }, '*');
+    });
+
+    // Debug: log when widget JS loads and any uncaught errors
+    window.addEventListener('error', (e) => {
+      console.error('[KYC] uncaught:', e.message, e.filename, e.lineno);
     });
   </script>
 </body>
