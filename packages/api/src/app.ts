@@ -14,6 +14,7 @@ import authPlugin from './plugins/auth.js';
 import errorHandlerPlugin from './plugins/errorHandler.js';
 import v1Routes from './routes/v1/index.js';
 import healthRoutes from './routes/internal/health.js';
+import verifyPageRoute from './routes/internal/verify.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -149,6 +150,7 @@ Session tokens are obtained by creating a session from your **server** and passi
 
   // Routes
   await app.register(healthRoutes);
+  await app.register(verifyPageRoute);
   await app.register(v1Routes, { prefix: '/v1' });
 
   return app;

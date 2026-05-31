@@ -47,7 +47,7 @@ export class SessionService {
       sessionId,
       sessionToken,
       expiresAt,
-      widgetUrl: `/widget?session_token=${sessionToken}`,
+      widgetUrl: `/verify?session_token=${sessionToken}`,
     };
   }
 
