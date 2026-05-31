@@ -31,10 +31,12 @@ export async function buildApp() {
     },
   });
 
-  // CORS
+  // CORS — allow any origin for API calls (auth is enforced via Bearer tokens, not cookies)
   await app.register(cors, {
-    origin: env.CORS_ORIGINS.split(',').map((o) => o.trim()),
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false,
   });
 
   // Multipart (file uploads)
