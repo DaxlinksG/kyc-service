@@ -160,9 +160,9 @@ export default async function sessionRoutes(app: FastifyInstance) {
     return reply.send(formatSession(session.id));
   });
 
-  // GET /v1/sessions/:id/status
+  // GET /v1/sessions/:id/status — accepts both merchant API key and session token
   app.get<{ Params: { id: string } }>('/sessions/:id/status', {
-    preHandler: [(app as any).verifyMerchantAuth],
+    preHandler: [(app as any).verifyAnyAuth],
     schema: {
       tags: ['Sessions'],
       summary: 'Poll session status',
