@@ -66,7 +66,9 @@ export default async function verifyPageRoute(app: FastifyInstance) {
         </body></html>
       `);
     }
-    const apiBase = `${request.protocol}://${request.hostname}`;
+    // Use X-Forwarded-Proto if behind a reverse proxy (nginx), fallback to request.protocol
+    const proto = (request.headers['x-forwarded-proto'] as string)?.split(',')[0]?.trim() ?? request.protocol;
+    const apiBase = `${proto}://${request.hostname}`;
     return reply.type('text/html').send(HTML(token, apiBase));
   });
 }
