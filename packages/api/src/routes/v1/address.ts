@@ -39,18 +39,7 @@ export default async function addressRoutes(app: FastifyInstance) {
           id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
         },
       },
-      body: {
-        type: 'object',
-        required: ['file', 'document_type'],
-        properties: {
-          file: { type: 'string', format: 'binary', description: 'Address document (JPEG, PNG, or PDF)' },
-          document_type: {
-            type: 'string',
-            enum: ['UTILITY_BILL', 'BANK_STATEMENT', 'GOVERNMENT_LETTER'],
-            description: 'Type of address document',
-          },
-        },
-      },
+      // body schema omitted — multipart/form-data bypasses JSON body validation
       response: {
         202: {
           description: 'Address document accepted and queued for processing',

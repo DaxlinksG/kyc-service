@@ -37,24 +37,7 @@ export default async function documentRoutes(app: FastifyInstance) {
           id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
         },
       },
-      body: {
-        type: 'object',
-        required: ['file', 'document_type'],
-        properties: {
-          file: { type: 'string', format: 'binary', description: 'Document image (JPEG, PNG, or PDF)' },
-          document_type: {
-            type: 'string',
-            enum: ['PASSPORT', 'NATIONAL_ID', 'DRIVERS_LICENSE'],
-            description: 'Type of identity document',
-          },
-          side: {
-            type: 'string',
-            enum: ['FRONT', 'BACK'],
-            default: 'FRONT',
-            description: 'Required for NATIONAL_ID and DRIVERS_LICENSE — upload front first, then back.',
-          },
-        },
-      },
+      // body schema omitted — multipart/form-data bypasses JSON body validation
       response: {
         202: {
           description: 'Document accepted and queued for processing',

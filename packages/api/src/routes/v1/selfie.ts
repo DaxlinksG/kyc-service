@@ -39,13 +39,7 @@ export default async function selfieRoutes(app: FastifyInstance) {
           id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
         },
       },
-      body: {
-        type: 'object',
-        required: ['file'],
-        properties: {
-          file: { type: 'string', format: 'binary', description: 'Selfie image (JPEG or PNG)' },
-        },
-      },
+      // body schema omitted — multipart/form-data bypasses JSON body validation
       response: {
         202: {
           description: 'Selfie accepted and queued for processing',
