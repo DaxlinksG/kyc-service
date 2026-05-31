@@ -49,12 +49,12 @@ function checkAndScoreIfReady(sessionId: string): void {
   const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as DbSession | undefined;
   if (!session) return;
 
-  // All three checks done?
-  const docDone = db.prepare("SELECT 1 FROM documents WHERE session_id = ? AND status = 'DONE'").get(sessionId);
-  const selfieDone = db.prepare("SELECT 1 FROM selfie_checks WHERE session_id = ? AND status = 'DONE'").get(sessionId);
-  const addressDone = db.prepare("SELECT 1 FROM address_checks WHERE session_id = ? AND status = 'DONE'").get(sessionId);
+  // Score once all three checks are terminal (DONE or FAILED — not still PROCESSING/QUEUED)
+  const docTerminal = db.prepare("SELECT 1 FROM documents WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
+  const selfieTerminal = db.prepare("SELECT 1 FROM selfie_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
+  const addressTerminal = db.prepare("SELECT 1 FROM address_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
 
-  if (docDone && selfieDone && addressDone) {
+  if (docTerminal && selfieTerminal && addressTerminal) {
     sessionService.transition(sessionId, 'processing');
     enqueueJob('SCORE_SESSION', { sessionId });
   }
