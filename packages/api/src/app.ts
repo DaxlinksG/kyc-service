@@ -127,15 +127,24 @@ Session tokens are obtained by creating a session from your **server** and passi
   // Error handler
   await app.register(errorHandlerPlugin);
 
-  // Serve admin dashboard (built static files)
+  // Serve admin dashboard and widget (built static files)
   const publicDir = join(__dirname, '../public');
   if (existsSync(publicDir)) {
-    // Redirect /admin → /admin/ so relative asset paths resolve correctly
+    // Admin dashboard
     app.get('/admin', (_req, reply) => reply.redirect('/admin/'));
     await app.register(staticFiles, {
       root: publicDir,
       prefix: '/admin/',
     });
+    // Widget JS — served at /widget/kyc-widget.js
+    const widgetDir = join(publicDir, 'widget');
+    if (existsSync(widgetDir)) {
+      await app.register(staticFiles, {
+        root: widgetDir,
+        prefix: '/widget/',
+        decorateReply: false,
+      });
+    }
   }
 
   // Routes

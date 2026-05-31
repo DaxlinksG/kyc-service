@@ -1,4 +1,4 @@
-# ---- Build admin dashboard ----
+# ---- Build admin dashboard + widget ----
 FROM node:20-alpine AS admin-build
 WORKDIR /app
 
@@ -6,13 +6,19 @@ RUN apk add --no-cache python3 make g++ cairo-dev pango-dev jpeg-dev giflib-dev 
 
 COPY package.json package-lock.json ./
 COPY packages/admin/package.json ./packages/admin/
+COPY packages/widget/package.json ./packages/widget/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/api/package.json ./packages/api/
 RUN npm install --workspaces
 COPY packages/admin ./packages/admin
+COPY packages/widget ./packages/widget
 COPY packages/sdk ./packages/sdk
 COPY tsconfig.base.json ./
 RUN npm run build --workspace=packages/admin
+RUN npm run build --workspace=packages/widget
+# Copy widget JS into API's public/widget folder (served at /widget/kyc-widget.js)
+RUN mkdir -p packages/api/public/widget && \
+    cp packages/widget/dist/kyc-widget.iife.js packages/api/public/widget/kyc-widget.js
 
 # ---- Production API ----
 FROM node:20-alpine AS production
