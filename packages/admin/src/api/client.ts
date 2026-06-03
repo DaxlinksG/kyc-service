@@ -17,7 +17,7 @@ class ApiClient {
     const r = await fetch(`${this.base}${path}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${this.key}`, 'Content-Type': 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
+      body: JSON.stringify(body ?? {}),
     });
     if (!r.ok) throw await r.json();
     return r.json();
