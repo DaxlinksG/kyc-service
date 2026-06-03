@@ -33,7 +33,7 @@ export class WebhookService {
 
   async dispatch(sessionId: string, event: WebhookEvent, data: Record<string, unknown>): Promise<void> {
     const db = getDb();
-    const session = db.prepare('SELECT merchant_id FROM sessions WHERE id = ?').get(sessionId) as { merchant_id: string } | undefined;
+    const session = db.prepare('SELECT merchant_id, external_id, metadata FROM sessions WHERE id = ?').get(sessionId) as { merchant_id: string; external_id: string | null; metadata: string | null } | undefined;
     if (!session) return;
 
     const endpoints = db
@@ -45,7 +45,14 @@ export class WebhookService {
       if (!subscribedEvents.includes(event) && !subscribedEvents.includes('*' as any)) continue;
 
       const deliveryId = `whd_${nanoid(12)}`;
-      const payload = JSON.stringify({ event, session_id: sessionId, data, created_at: Date.now() });
+      const payload = JSON.stringify({
+        event,
+        session_id: sessionId,
+        external_id: session.external_id ?? null,
+        metadata: session.metadata ? JSON.parse(session.metadata) : null,
+        data,
+        created_at: Date.now(),
+      });
 
       db.prepare(`
         INSERT INTO webhook_deliveries (id, endpoint_id, event, payload, next_retry_at)

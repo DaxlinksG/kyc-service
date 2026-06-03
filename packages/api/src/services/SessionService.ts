@@ -8,6 +8,7 @@ import type { SessionState } from '../config/constants.js';
 
 export interface CreateSessionOptions {
   merchantId: string;
+  externalId?: string;
   metadata?: Record<string, unknown>;
   redirectUrl?: string;
 }
@@ -32,12 +33,13 @@ export class SessionService {
     const tokenHash = hashSessionToken(sessionToken);
 
     db.prepare(`
-      INSERT INTO sessions (id, merchant_id, state, session_token_hash, metadata, redirect_url, expires_at)
-      VALUES (?, ?, 'created', ?, ?, ?, ?)
+      INSERT INTO sessions (id, merchant_id, state, session_token_hash, external_id, metadata, redirect_url, expires_at)
+      VALUES (?, ?, 'created', ?, ?, ?, ?, ?)
     `).run(
       sessionId,
       opts.merchantId,
       tokenHash,
+      opts.externalId ?? null,
       opts.metadata ? JSON.stringify(opts.metadata) : null,
       opts.redirectUrl ?? null,
       expiresAt,

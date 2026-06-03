@@ -65,6 +65,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const body = createSessionSchema.parse(request.body);
     const result = sessionService.create({
       merchantId: request.merchantId!,
+      externalId: body.externalId,
       metadata: body.metadata,
       redirectUrl: body.redirect_url,
     });
@@ -194,6 +195,7 @@ function formatSession(sessionId: string) {
 
   const result: Record<string, unknown> = {
     id: session.id,
+    external_id: session.external_id ?? null,
     state: session.state,
     created_at: session.created_at,
     updated_at: session.updated_at,
