@@ -10,6 +10,7 @@ const riskService = new RiskScoringService();
 
 const createSessionSchema = z.object({
   externalId: z.string().optional(),
+  external_id: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
   redirect_url: z.string().url().optional(),
 });
@@ -65,7 +66,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
     const body = createSessionSchema.parse(request.body);
     const result = sessionService.create({
       merchantId: request.merchantId!,
-      externalId: body.externalId,
+      externalId: body.externalId ?? body.external_id,
       metadata: body.metadata,
       redirectUrl: body.redirect_url,
     });
