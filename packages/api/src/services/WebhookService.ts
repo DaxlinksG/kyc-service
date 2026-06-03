@@ -93,7 +93,8 @@ export class WebhookService {
           WHERE id = ?
         `).run(timestamp, response.status, deliveryId);
       } else {
-        this.scheduleRetry(deliveryId, delivery.attempts + 1, response.status, `HTTP ${response.status}`);
+        const body = await response.text().catch(() => '');
+        this.scheduleRetry(deliveryId, delivery.attempts + 1, response.status, `HTTP ${response.status}: ${body.slice(0, 200)}`);
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
