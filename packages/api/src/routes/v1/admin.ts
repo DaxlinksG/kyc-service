@@ -4,10 +4,12 @@ import { getDb } from '../../db/client.js';
 import { ForbiddenError } from '../../types/errors.js';
 import { SessionService } from '../../services/SessionService.js';
 import { RiskScoringService } from '../../services/RiskScoringService.js';
+import { WebhookService } from '../../services/WebhookService.js';
 import { enqueueJob } from '../../workers/queue.js';
 
 const sessionService = new SessionService();
 const riskService = new RiskScoringService();
+const webhookService = new WebhookService();
 
 function adminOnly(request: any) {
   if (request.merchantId !== '__admin__') throw new ForbiddenError('Admin access required');
@@ -120,6 +122,7 @@ export default async function adminRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: { code: 'INVALID_STATE', message: `Cannot approve session in state: ${session.state}` } });
     }
     sessionService.transition(req.params.id, 'approved');
+    await webhookService.dispatch(req.params.id, 'session.approved', { manual: true });
     return reply.send({ id: req.params.id, state: 'approved' });
   });
 
@@ -134,6 +137,7 @@ export default async function adminRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: { code: 'INVALID_STATE', message: `Cannot reject session in state: ${session.state}` } });
     }
     sessionService.transition(req.params.id, 'rejected');
+    await webhookService.dispatch(req.params.id, 'session.rejected', { manual: true });
     return reply.send({ id: req.params.id, state: 'rejected' });
   });
 
