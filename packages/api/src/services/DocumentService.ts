@@ -5,6 +5,7 @@ import { getDb } from '../db/client.js';
 import type { DbDocument } from '../db/schema.js';
 import { preprocessForOcr, cropMrzZone, pdfToImage } from '../lib/imagePreprocessor.js';
 import { extractMrzLines, parseMrz } from '../lib/ocrParsers/mrzParser.js';
+import { parseIdDocument } from '../lib/ocrParsers/idParser.js';
 import type { ParsedDocument } from '../types/domain.js';
 import { env } from '../config/env.js';
 
@@ -63,11 +64,25 @@ export class DocumentService {
           confidence = mrz.checksumsValid ? 0.9 : 0.65;
           rawText = mrzResult.data.text;
         } else {
-          // Fall back to full-page OCR
+          // Fall back to full-page OCR with no character whitelist
+          await worker.setParameters({
+            tessedit_char_whitelist: '',
+            tessedit_pageseg_mode: '3' as any,
+          });
           const fullResult = await worker.recognize(preprocessed);
           rawText = fullResult.data.text;
-          confidence = fullResult.data.confidence / 100;
-          parsed = { mrzDetected: false };
+
+          // Parse structured fields from printed text (driver's license, national ID)
+          const idData = parseIdDocument(rawText);
+          const hasData = !!(idData.fullName || idData.documentNumber || idData.dateOfBirth);
+          parsed = {
+            mrzDetected: false,
+            ...idData,
+          };
+          // Boost confidence if we extracted useful fields
+          confidence = hasData
+            ? Math.max(0.55, fullResult.data.confidence / 100)
+            : fullResult.data.confidence / 100;
         }
       } finally {
         await worker.terminate();
