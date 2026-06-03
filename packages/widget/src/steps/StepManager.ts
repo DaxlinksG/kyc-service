@@ -104,7 +104,7 @@ export class StepManager {
     const docTypes = [
       { id: 'PASSPORT', icon: '🛂', label: 'Passport' },
       { id: 'NATIONAL_ID', icon: '🪪', label: 'National ID' },
-      { id: 'DRIVERS_LICENSE', icon: '🚗', label: "Driver's\nLicense" },
+      { id: 'DRIVING_LICENSE', icon: '🚗', label: "Driver's\nLicense" },
     ];
 
     el.insertAdjacentHTML('beforeend', `
