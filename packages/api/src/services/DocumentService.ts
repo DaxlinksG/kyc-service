@@ -38,6 +38,11 @@ export class DocumentService {
       let confidence = 0;
 
       try {
+        // Configure Tesseract for MRZ: restrict to valid chars only
+        await worker.setParameters({
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<',
+          tessedit_pageseg_mode: '6' as any,
+        });
         // Try MRZ zone first
         const mrzResult = await worker.recognize(mrzZone);
         const mrzLines = extractMrzLines(mrzResult.data.text);

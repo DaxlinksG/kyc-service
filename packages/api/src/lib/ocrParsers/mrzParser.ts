@@ -15,20 +15,43 @@ export interface MrzData {
   checksumsValid: boolean;
 }
 
+/**
+ * Normalize a raw OCR line to clean MRZ characters.
+ * Tesseract often misreads < as L, (, [, |, etc.
+ */
+function normalizeMrzLine(raw: string): string {
+  return raw
+    .toUpperCase()
+    .replace(/\s+/g, '')           // remove all whitespace
+    .replace(/[(\[{|¢]/g, '<')    // common OCR misreads of <
+    .replace(/O(?=\d)/g, '0')      // letter O before digit → 0 (in numeric fields)
+    .replace(/(?<=\d)O/g, '0')     // letter O after digit → 0
+    .replace(/L{3,}/g, m => '<'.repeat(m.length)); // 3+ consecutive Ls → < (padding misread)
+}
+
 /** Extract MRZ lines from raw OCR text. */
 export function extractMrzLines(text: string): string[] | null {
-  // Normalize: uppercase, remove spaces within potential MRZ lines
-  const lines = text
-    .split('\n')
-    .map((l) => l.replace(/\s+/g, '').toUpperCase())
-    .filter((l) => /^[A-Z0-9<]{20,}$/.test(l));
+  const candidates: string[] = [];
 
-  // TD3: 2 lines of 44 chars (passport)
-  const td3 = lines.filter((l) => l.length === 44);
+  for (const rawLine of text.split('\n')) {
+    const normalized = normalizeMrzLine(rawLine);
+    // Find the longest run of valid MRZ chars within this line
+    const match = normalized.match(/[A-Z0-9<]{28,}/);
+    if (match) {
+      candidates.push(match[0]);
+    }
+  }
+
+  // TD3: 2 lines of exactly 44 chars (passport)
+  const td3 = candidates
+    .filter(l => l.length >= 43 && l.length <= 46)
+    .map(l => l.slice(0, 44).padEnd(44, '<'));
   if (td3.length >= 2) return td3.slice(0, 2);
 
-  // TD1: 3 lines of 30 chars (ID card)
-  const td1 = lines.filter((l) => l.length === 30);
+  // TD1: 3 lines of exactly 30 chars (ID card)
+  const td1 = candidates
+    .filter(l => l.length >= 29 && l.length <= 32)
+    .map(l => l.slice(0, 30).padEnd(30, '<'));
   if (td1.length >= 3) return td1.slice(0, 3);
 
   return null;
@@ -76,8 +99,7 @@ function parseTD1(line1: string, line2: string, line3: string): MrzData {
   const dob = parseMrzDate(line2.slice(0, 6));
   const expiry = parseMrzDate(line2.slice(8, 14));
 
-  const rawName = line3;
-  const { lastName, firstName } = parseName(rawName);
+  const { lastName, firstName } = parseName(line3);
 
   return {
     documentType,
@@ -88,12 +110,14 @@ function parseTD1(line1: string, line2: string, line3: string): MrzData {
     lastName,
     firstName,
     isExpired: isExpiredDate(expiry),
-    checksumsValid: true, // simplified
+    checksumsValid: true,
   };
 }
 
 function parseName(rawName: string): { lastName: string; firstName: string } {
-  const parts = rawName.split('<<');
+  // Normalize remaining L-for-< misreads in padding area (3+ consecutive Ls)
+  const normalized = rawName.replace(/L{3,}/g, m => '<'.repeat(m.length));
+  const parts = normalized.split('<<');
   const lastName = (parts[0] ?? '').replace(/</g, ' ').trim();
   const firstName = (parts[1] ?? '').replace(/</g, ' ').trim();
   return { lastName, firstName };
@@ -104,7 +128,6 @@ function parseMrzDate(yymmdd: string): string {
   const yy = parseInt(yymmdd.slice(0, 2), 10);
   const mm = yymmdd.slice(2, 4);
   const dd = yymmdd.slice(4, 6);
-  // Assume < 30 is 2000s, >= 30 is 1900s
   const yyyy = yy < 30 ? 2000 + yy : 1900 + yy;
   return `${yyyy}-${mm}-${dd}`;
 }

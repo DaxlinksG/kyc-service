@@ -38,7 +38,7 @@ export async function preprocessForFace(input: Buffer): Promise<Buffer> {
  */
 export async function cropMrzZone(input: Buffer): Promise<Buffer> {
   const { width = 0, height = 0 } = await sharp(input).metadata();
-  const mrzHeight = Math.floor(height * 0.18);
+  const mrzHeight = Math.floor(height * 0.28);
   const top = height - mrzHeight;
   return sharp(input)
     .extract({ left: 0, top, width, height: mrzHeight })
