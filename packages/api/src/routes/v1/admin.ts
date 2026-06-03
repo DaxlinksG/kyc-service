@@ -110,7 +110,10 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // POST /admin/sessions/:id/approve — manual override
-  app.post<{ Params: { id: string } }>('/admin/sessions/:id/approve', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.post<{ Params: { id: string } }>('/admin/sessions/:id/approve', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: { body: { type: 'object' } },
+  }, async (req, reply) => {
     adminOnly(req);
     const session = sessionService.getById(req.params.id);
     if (!['manual_review', 'processing'].includes(session.state)) {
@@ -121,7 +124,10 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // POST /admin/sessions/:id/reject — manual override
-  app.post<{ Params: { id: string } }>('/admin/sessions/:id/reject', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.post<{ Params: { id: string } }>('/admin/sessions/:id/reject', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: { body: { type: 'object' } },
+  }, async (req, reply) => {
     adminOnly(req);
     const session = sessionService.getById(req.params.id);
     if (!['manual_review', 'processing'].includes(session.state)) {
