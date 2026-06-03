@@ -30,6 +30,10 @@ export function parseIdDocument(rawText: string): ParsedIdDocument {
 
 /** Extract document/license number — alphanumeric, 6-15 chars. */
 function extractDocumentNumber(text: string): string | undefined {
+  // Labeled: "DL: 00942432", "DL:00942432", "Driver Licence No:", "License No:", "Licence #"
+  const labeled = text.match(/(?:d\.?l\.?|driver'?s?\s+licen[cs]e?|licen[cs]e?|id|card)\s*[:\s#]+([A-Z0-9]{5,15})\b/i);
+  if (labeled) return labeled[1]?.toUpperCase();
+
   // Nigerian FRSC DL format: DL + 9 digits e.g. DL109942432
   const frsc = text.match(/\bDL\d{7,10}\b/i);
   if (frsc) return frsc[0].toUpperCase();
@@ -38,81 +42,124 @@ function extractDocumentNumber(text: string): string | undefined {
   const nin = text.match(/\bNIN[:\s]*(\d{11})\b/i);
   if (nin) return nin[1];
 
-  // Generic: labeled license/ID number
-  const labeled = text.match(/(?:licence|license|id|card|number|no\.?)[:\s#]+([A-Z0-9]{6,15})\b/i);
-  if (labeled) return labeled[1]?.toUpperCase();
-
-  // Standalone alphanumeric token that looks like an ID (mix of letters+digits, 8-12 chars)
+  // Standalone alphanumeric token that looks like an ID (mix of letters+digits, 7-12 chars)
   const tokens = text.match(/\b[A-Z]{1,3}\d{6,10}\b/g);
   if (tokens?.length) return tokens[0];
 
   return undefined;
 }
 
-/** Extract dates — Nigerian FRSC uses YYYYJdd or YYYYMMMDD format. */
-function extractDates(text: string, lines: string[]): { dateOfBirth?: string; expiryDate?: string; issueDate?: string } {
-  // Nigerian FRSC format: 1993J30 = 1993-Jan-30, 2029J30 = 2029-Jan-30
-  // Also: 2025J18 = 2025-Jan-18
-  const frscDates = text.match(/\b((?:19|20)\d{2})[A-Z](\d{2})\b/g) ?? [];
-  const parsedFrsc = frscDates.map(d => {
-    const m = d.match(/^((?:19|20)\d{2})[A-Z](\d{2})$/);
-    if (!m) return null;
-    // Month letter: J=Jan for Nigerian FRSC (simplification — month always encoded as 3-letter abbrev first letter)
-    // In practice J could be Jan, Jun, Jul — use context position
-    return `${m[1]}-01-${m[2]!.padStart(2, '0')}`;
-  }).filter(Boolean) as string[];
+const MONTH_MAP: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
 
-  // Standard date formats: DD/MM/YYYY, YYYY-MM-DD, DD MMM YYYY
-  const stdDates: string[] = [];
+/** Parse YYYYMMMDD or YYYY-Mon-DD or YYYY/Mon/DD where Mon is 3-letter month name (possibly truncated by OCR). */
+function parseYearMonthDay(raw: string): string | null {
+  // Full 3-letter month: 1993JUL30, 2029JAN18, 2025SEP05
+  const full = raw.match(/^((?:19|20)\d{2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d{2})$/i);
+  if (full) {
+    const mon = MONTH_MAP[full[2]!.toLowerCase().slice(0, 3)];
+    if (mon) return `${full[1]}-${mon}-${full[3]}`;
+  }
+  // Truncated by OCR to single letter: 1993J30 — ambiguous, assume month = position in document
+  const single = raw.match(/^((?:19|20)\d{2})([A-Z])(\d{2})$/);
+  if (single) {
+    // Map single letter to likely month: J→Jul(7), F→Feb, M→Mar, A→Apr, S→Sep, O→Oct, N→Nov, D→Dec
+    const singleMap: Record<string, string> = {
+      J: '07', F: '02', M: '03', A: '04', S: '09', O: '10', N: '11', D: '12',
+    };
+    const mon = singleMap[single[2]!] ?? '01';
+    return `${single[1]}-${mon}-${single[3]}`;
+  }
+  return null;
+}
+
+/** Extract dates — handles BC/Canadian YYYYMMMDD, Nigerian FRSC, and standard formats. */
+function extractDates(text: string, lines: string[]): { dateOfBirth?: string; expiryDate?: string; issueDate?: string } {
+  const allDates: string[] = [];
+
+  // 1. Labeled dates (highest priority)
+  let dateOfBirth: string | undefined;
+  let issueDate: string | undefined;
+  let expiryDate: string | undefined;
+
+  const labeledPatterns: [RegExp, 'dob' | 'issue' | 'expiry'][] = [
+    [/(?:date\s+of\s+birth|dob|born|birth\s+date)[:\s]+([A-Z0-9\-\/\.]{6,12})/i, 'dob'],
+    [/(?:expiry|expiration|expires?|valid\s+(?:until|thru|to)|exp\.?)[:\s]+([A-Z0-9\-\/\.]{6,12})/i, 'expiry'],
+    [/(?:issued?|issue\s+date|iss\.?)[:\s]+([A-Z0-9\-\/\.]{6,12})/i, 'issue'],
+  ];
+  for (const [pat, type] of labeledPatterns) {
+    const m = text.match(pat);
+    if (m?.[1]) {
+      const parsed = parseDateString(m[1]);
+      if (parsed) {
+        if (type === 'dob') dateOfBirth = parsed;
+        else if (type === 'expiry') expiryDate = parsed;
+        else issueDate = parsed;
+      }
+    }
+  }
+
+  // 2. YYYYMMMDD pattern (BC/Canadian, Nigerian FRSC): 1993JUL30, 2025JAN18, 1993J30
+  const ymdTokens = text.match(/\b((?:19|20)\d{2})[A-Z]{1,3}\d{2}\b/g) ?? [];
+  for (const token of ymdTokens) {
+    const parsed = parseYearMonthDay(token);
+    if (parsed) allDates.push(parsed);
+  }
+
+  // 3. Standard date formats: DD/MM/YYYY, YYYY-MM-DD, MM/DD/YYYY
   const stdPatterns = [
-    /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/g,
-    /\b(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})\b/g,
+    /\b(\d{4})[\/\-\.](\d{2})[\/\-\.](\d{2})\b/g,   // YYYY-MM-DD
+    /\b(\d{2})[\/\-\.](\d{2})[\/\-\.](\d{4})\b/g,   // DD/MM/YYYY or MM/DD/YYYY
   ];
   for (const pat of stdPatterns) {
     let m: RegExpExecArray | null;
     while ((m = pat.exec(text)) !== null) {
       const [, a, b, c] = m;
-      // Determine if YYYY-MM-DD or DD-MM-YYYY
-      if (a && a.length === 4) stdDates.push(`${a}-${b!.padStart(2, '0')}-${c!.padStart(2, '0')}`);
-      else if (c && c.length === 4) stdDates.push(`${c}-${b!.padStart(2, '0')}-${a!.padStart(2, '0')}`);
+      if (a && a.length === 4) allDates.push(`${a}-${b!.padStart(2, '0')}-${c!.padStart(2, '0')}`);
+      else if (c && c.length === 4) allDates.push(`${c}-${b!.padStart(2, '0')}-${a!.padStart(2, '0')}`);
     }
   }
 
-  const allDates = [...new Set([...parsedFrsc, ...stdDates])]
-    .filter(d => {
-      const yr = parseInt(d.slice(0, 4));
-      return yr >= 1940 && yr <= 2060;
-    })
-    .sort();
+  // 4. DD Mon YYYY: "30 Jul 1993", "18 Jan 2025"
+  const dMonY = text.matchAll(/\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{4})\b/gi);
+  for (const m of dMonY) {
+    const mon = MONTH_MAP[m[2]!.toLowerCase().slice(0, 3)];
+    if (mon) allDates.push(`${m[3]}-${mon}-${m[1]!.padStart(2, '0')}`);
+  }
 
-  // Heuristic assignment:
-  // - DOB: year 1940-2010
-  // - Issue: year 2015-2026
-  // - Expiry: year 2024-2060 (furthest future)
-  let dateOfBirth: string | undefined;
-  let issueDate: string | undefined;
-  let expiryDate: string | undefined;
-
-  for (const d of allDates) {
+  // Filter valid years
+  const validDates = [...new Set(allDates)].filter(d => {
     const yr = parseInt(d.slice(0, 4));
-    if (yr <= 2005 && !dateOfBirth) dateOfBirth = d;
-    else if (yr >= 2015 && yr <= 2026 && !issueDate) issueDate = d;
-    else if (yr > 2026 && !expiryDate) expiryDate = d;
+    return yr >= 1940 && yr <= 2060;
+  }).sort();
+
+  // Assign by year heuristic if not already labeled
+  for (const d of validDates) {
+    const yr = parseInt(d.slice(0, 4));
+    if (!dateOfBirth && yr <= 2005) dateOfBirth = d;
+    else if (!issueDate && yr >= 2010 && yr <= 2026) issueDate = d;
+    else if (!expiryDate && yr > 2026) expiryDate = d;
   }
 
-  // If only 2 dates found and no expiry: last one is likely expiry
-  if (!expiryDate && allDates.length >= 2) {
-    expiryDate = allDates[allDates.length - 1];
+  // If still no expiry, take the latest date
+  if (!expiryDate && validDates.length >= 2) {
+    expiryDate = validDates[validDates.length - 1];
   }
-
-  // Try labeled dates
-  const dobLabeled = text.match(/(?:date\s+of\s+birth|dob|born)[:\s]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i);
-  if (dobLabeled?.[1]) dateOfBirth = normalizeDate(dobLabeled[1]);
-
-  const expLabeled = text.match(/(?:expiry|expiration|expires?|valid\s+(?:until|to))[:\s]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i);
-  if (expLabeled?.[1]) expiryDate = normalizeDate(expLabeled[1]);
 
   return { dateOfBirth, expiryDate, issueDate };
+}
+
+function parseDateString(raw: string): string | null {
+  const s = raw.trim();
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmy) return `${dmy[3]}-${dmy[2]!.padStart(2,'0')}-${dmy[1]!.padStart(2,'0')}`;
+  // YYYYMMMDD
+  return parseYearMonthDay(s);
 }
 
 /** Extract name from OCR lines. */
