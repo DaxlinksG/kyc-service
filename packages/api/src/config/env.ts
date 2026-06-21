@@ -18,10 +18,15 @@ const envSchema = z.object({
   JOB_POLL_INTERVAL_MS: z.coerce.number().default(500),
   JOB_MAX_CONCURRENCY: z.coerce.number().default(4),
 
-  // AWS Rekognition (face match + liveness quality scoring)
+  // AWS Rekognition (face match + liveness)
   AWS_REGION: z.string().default('us-east-1'),
   AWS_ACCESS_KEY_ID: z.string().min(16),
   AWS_SECRET_ACCESS_KEY: z.string().min(16),
+
+  // Scoped credentials for browser-side Amplify FaceLivenessDetector
+  // IAM user: kyc-liveness-client — ONLY has rekognition:StartFaceLivenessSession
+  AWS_LIVENESS_ACCESS_KEY_ID: z.string().min(16),
+  AWS_LIVENESS_SECRET_ACCESS_KEY: z.string().min(16),
 
   RISK_APPROVE_THRESHOLD: z.coerce.number().default(0.8),
   RISK_MANUAL_THRESHOLD: z.coerce.number().default(0.55),

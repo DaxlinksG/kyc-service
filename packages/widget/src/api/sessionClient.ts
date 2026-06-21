@@ -48,6 +48,19 @@ export class SessionClient {
     return this.fetch<SessionStatus>(`/v1/sessions/${this.sessionId}/status`);
   }
 
+  async createFaceLivenessSession(sessionId: string): Promise<{
+    face_liveness_session_id: string;
+    region: string;
+    access_key_id: string;
+    secret_access_key: string;
+  }> {
+    return this.fetch(`/v1/sessions/${sessionId}/face-liveness`, { method: 'POST' });
+  }
+
+  getSessionId(): string { return this.sessionId; }
+  getSessionToken(): string { return this.sessionToken; }
+  getApiBase(): string { return this.apiBaseUrl; }
+
   private async fetch<T = void>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await globalThis.fetch(`${this.apiBaseUrl}${path}`, {
       ...init,

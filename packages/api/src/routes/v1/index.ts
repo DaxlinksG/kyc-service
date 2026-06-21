@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import sessionRoutes from './sessions.js';
 import documentRoutes from './documents.js';
 import selfieRoutes from './selfie.js';
+import faceLivenessRoutes from './faceLiveness.js';
 import addressRoutes from './address.js';
 import webhookRoutes from './webhooks.js';
 import apiKeyRoutes from './apiKeys.js';
@@ -11,6 +12,7 @@ export default async function v1Routes(app: FastifyInstance) {
   app.register(sessionRoutes);
   app.register(documentRoutes);
   app.register(selfieRoutes);
+  app.register(faceLivenessRoutes);
   app.register(addressRoutes);
   app.register(webhookRoutes);
   app.register(apiKeyRoutes);

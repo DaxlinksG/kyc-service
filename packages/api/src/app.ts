@@ -149,6 +149,16 @@ Session tokens are obtained by creating a session from your **server** and passi
         decorateReply: false,
       });
     }
+
+    // Face Liveness React app — served at /liveness/
+    const livenessDir = join(publicDir, 'liveness');
+    if (existsSync(livenessDir)) {
+      await app.register(staticFiles, {
+        root: livenessDir,
+        prefix: '/liveness/',
+        decorateReply: false,
+      });
+    }
   }
 
   // Routes

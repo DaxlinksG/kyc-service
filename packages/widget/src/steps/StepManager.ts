@@ -309,198 +309,79 @@ export class StepManager {
     });
   }
 
-  // ─── SELFIE ──────────────────────────────────────────────────────────────────
+  // ─── SELFIE (AWS Face Liveness via iframe) ───────────────────────────────────
 
   private renderSelfie(): void {
     const el = this.ctx.container;
-    let capturedFile: File | null = null;
-    let stream: MediaStream | null = null;
-    let phase: 'camera' | 'preview' | 'upload' = 'camera';
 
     el.insertAdjacentHTML('beforeend', `
-      <h2>Take a Selfie</h2>
-      <p>Look straight at the camera. Good lighting, no sunglasses.</p>
-      <div class="capture-area" id="selfie-capture">
-        <div class="cam-error" id="selfie-cam-error" style="display:none">
-          <span style="font-size:32px">🤳</span>
-          <p>Camera not available</p>
-          <p>Please upload a photo instead</p>
-        </div>
-        <video id="selfie-video" autoplay muted playsinline style="display:none;transform:scaleX(-1)"></video>
-        <canvas id="selfie-canvas" style="display:none"></canvas>
-        <div class="face-overlay" id="selfie-overlay" style="display:none">
-          <div class="face-oval" id="face-oval"></div>
-        </div>
-        <div class="camera-top-hint" id="selfie-hint" style="display:none">Centre your face in the oval</div>
-        <div class="countdown-overlay" id="selfie-countdown" style="display:none">
-          <span class="countdown-num" id="selfie-count-num"></span>
+      <h2>Liveness Check</h2>
+      <p>We need to confirm you're a real person. Follow the on-screen instructions.</p>
+      <div id="liveness-container" style="position:relative;width:100%;min-height:400px;border-radius:12px;overflow:hidden;background:#0f172a;margin-top:12px">
+        <div id="liveness-loading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#94a3b8;font-size:14px">
+          <div class="spinner"></div>
+          <span>Preparing liveness check…</span>
         </div>
       </div>
-      <div class="upload-zone" id="selfie-upload" style="display:none">
-        <input type="file" id="selfie-file" accept="image/*" capture="user">
-        <div class="upload-icon">🤳</div>
-        <p>Tap to take a selfie or choose photo</p>
-        <div class="file-selected" id="selfie-filename"></div>
-      </div>
-      <div id="selfie-error"></div>
-      <div class="actions">
-        <button class="btn btn-secondary" id="selfie-toggle" style="flex:0 0 auto">📤 Upload</button>
-        <button class="btn btn-primary" id="selfie-shutter" style="flex:1;display:none">📸 Capture</button>
-        <button class="btn btn-secondary" id="selfie-retake" style="display:none">Retake</button>
-        <button class="btn btn-primary" id="selfie-submit" disabled style="flex:1">Submit →</button>
-      </div>
+      <div id="selfie-error" style="margin-top:8px"></div>
     `);
 
-    const video = el.querySelector('#selfie-video') as HTMLVideoElement;
-    const canvas = el.querySelector('#selfie-canvas') as HTMLCanvasElement;
-    const overlay = el.querySelector('#selfie-overlay') as HTMLElement;
-    const faceOval = el.querySelector('#face-oval') as HTMLElement;
-    const hint = el.querySelector('#selfie-hint') as HTMLElement;
-    const countdown = el.querySelector('#selfie-countdown') as HTMLElement;
-    const countNum = el.querySelector('#selfie-count-num') as HTMLElement;
-    const uploadZone = el.querySelector('#selfie-upload') as HTMLElement;
-    const fileInput = el.querySelector('#selfie-file') as HTMLInputElement;
-    const toggleBtn = el.querySelector('#selfie-toggle') as HTMLButtonElement;
-    const shutterBtn = el.querySelector('#selfie-shutter') as HTMLButtonElement;
-    const retakeBtn = el.querySelector('#selfie-retake') as HTMLButtonElement;
-    const submitBtn = el.querySelector('#selfie-submit') as HTMLButtonElement;
+    const container = el.querySelector('#liveness-container') as HTMLElement;
     const errorDiv = el.querySelector('#selfie-error') as HTMLElement;
-    const camError = el.querySelector('#selfie-cam-error') as HTMLElement;
 
-    const startCamera = async () => {
+    const showError = (msg: string) => {
+      container.innerHTML = '';
+      errorDiv.innerHTML = `<div class="error-banner">${msg}</div>`;
+    };
+
+    const launchLiveness = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false,
+        // 1. Get face liveness session params from server
+        const sessionId = this.ctx.client.getSessionId();
+        const data = await this.ctx.client.createFaceLivenessSession(sessionId);
+
+        // 2. Build iframe URL
+        const apiBase = this.ctx.client.getApiBase();
+        const params = new URLSearchParams({
+          session_token: this.ctx.client.getSessionToken(),
+          face_liveness_session_id: data.face_liveness_session_id,
+          region: data.region,
+          api_base: apiBase,
+          access_key_id: data.access_key_id,
+          secret_access_key: data.secret_access_key,
         });
-        this.activeStream = stream;
-        video.srcObject = stream;
-        video.style.display = 'block';
-        overlay.style.display = 'flex';
-        hint.style.display = 'block';
-        shutterBtn.style.display = 'flex';
-        camError.style.display = 'none';
-        uploadZone.style.display = 'none';
-        phase = 'camera';
 
-        // Animate oval to "ready" after 1.5s
-        setTimeout(() => {
-          faceOval.classList.add('ready');
-          hint.textContent = '✓ Face detected — tap Capture';
-        }, 1500);
-      } catch {
-        camError.style.display = 'flex';
-        showUploadFallback();
-      }
-    };
+        const iframe = document.createElement('iframe');
+        iframe.src = `${apiBase}/liveness/?${params.toString()}`;
+        iframe.style.cssText = 'width:100%;height:480px;border:none;border-radius:12px;';
+        iframe.allow = 'camera';
 
-    const showUploadFallback = () => {
-      video.style.display = 'none';
-      overlay.style.display = 'none';
-      hint.style.display = 'none';
-      shutterBtn.style.display = 'none';
-      uploadZone.style.display = 'block';
-      toggleBtn.textContent = '📷 Camera';
-      phase = 'upload';
-    };
+        container.innerHTML = '';
+        container.appendChild(iframe);
 
-    const stopCamera = () => {
-      stream?.getTracks().forEach((t) => t.stop());
-      stream = null;
-      this.activeStream = null;
-    };
+        // 3. Listen for result from iframe
+        const onMessage = (e: MessageEvent) => {
+          if (e.data?.type === 'kyc:liveness:done') {
+            window.removeEventListener('message', onMessage);
+            container.innerHTML = `
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:#16a34a">
+                <div style="width:56px;height:56px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:24px">✓</div>
+                <span style="font-size:14px;color:#94a3b8">Liveness confirmed — continuing…</span>
+              </div>`;
+            setTimeout(() => this.advance(), 800);
+          } else if (e.data?.type === 'kyc:liveness:error') {
+            window.removeEventListener('message', onMessage);
+            showError(e.data.message ?? 'Liveness check failed. Please try again.');
+          }
+        };
+        window.addEventListener('message', onMessage);
 
-    startCamera();
-
-    toggleBtn.addEventListener('click', () => {
-      if (phase === 'camera') {
-        stopCamera();
-        showUploadFallback();
-      } else {
-        uploadZone.style.display = 'none';
-        canvas.style.display = 'none';
-        retakeBtn.style.display = 'none';
-        submitBtn.disabled = true;
-        toggleBtn.textContent = '📤 Upload';
-        faceOval.classList.remove('ready');
-        startCamera();
-      }
-    });
-
-    shutterBtn.addEventListener('click', () => {
-      shutterBtn.disabled = true;
-      countdown.style.display = 'flex';
-      let n = 3;
-      countNum.textContent = String(n);
-      const tick = setInterval(() => {
-        n--;
-        if (n > 0) { countNum.textContent = String(n); }
-        else {
-          clearInterval(tick);
-          countdown.style.display = 'none';
-          captureFrame();
-        }
-      }, 1000);
-    });
-
-    const captureFrame = () => {
-      // Mirror canvas to match mirrored video display
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-      stopCamera();
-      video.style.display = 'none';
-      canvas.style.display = 'block';
-      overlay.style.display = 'none';
-      hint.style.display = 'none';
-      shutterBtn.style.display = 'none';
-      retakeBtn.style.display = 'flex';
-      submitBtn.disabled = false;
-      phase = 'preview';
-
-      canvas.toBlob((blob) => {
-        if (blob) capturedFile = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
-      }, 'image/jpeg', 0.92);
-    };
-
-    retakeBtn.addEventListener('click', () => {
-      capturedFile = null;
-      canvas.style.display = 'none';
-      retakeBtn.style.display = 'none';
-      submitBtn.disabled = true;
-      faceOval.classList.remove('ready');
-      startCamera();
-    });
-
-    uploadZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0];
-      if (file) {
-        capturedFile = file;
-        submitBtn.disabled = false;
-        el.querySelector('#selfie-filename')!.textContent = file.name;
-      }
-    });
-
-    submitBtn.addEventListener('click', async () => {
-      if (!capturedFile) return;
-      errorDiv.innerHTML = '';
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Uploading…';
-      try {
-        await this.ctx.client.uploadSelfie(capturedFile);
-        this.advance();
       } catch (err) {
-        errorDiv.innerHTML = `<div class="error-banner">${(err as Error).message}</div>`;
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Submit →';
+        showError((err as Error).message ?? 'Could not start liveness check.');
       }
-    });
+    };
+
+    launchLiveness();
   }
 
   // ─── ADDRESS ─────────────────────────────────────────────────────────────────
