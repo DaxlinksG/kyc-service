@@ -119,24 +119,32 @@ export default fp(async function authPlugin(app: FastifyInstance) {
 
     try {
       const payload = verifySessionToken(token);
-      const sessionId = (request.params as Record<string, string>)['id'];
+      const routeSessionId = (request.params as Record<string, string>)['id'];
 
-      // Only enforce session-id matching on routes that have an :id param.
-      // Routes like /sessions/face-liveness/:faceLivenessSessionId/complete don't
-      // have :id — the handler is responsible for verifying ownership there.
-      if (sessionId !== undefined && payload.sub !== sessionId) {
-        throw new ForbiddenError('Token not valid for this session');
+      if (routeSessionId !== undefined) {
+        // Route has :id — verify the token belongs to that exact session
+        if (payload.sub !== routeSessionId) throw new ForbiddenError('Token not valid for this session');
+
+        const db = getDb();
+        const session = db.prepare('SELECT session_token_hash FROM sessions WHERE id = ?').get(routeSessionId) as
+          | { session_token_hash: string }
+          | undefined;
+        if (!session) throw new UnauthorizedError('Session not found');
+
+        const tokenHash = hashSessionToken(token);
+        if (tokenHash !== session.session_token_hash) throw new UnauthorizedError('Token revoked');
+      } else {
+        // Route has no :id (e.g. /sessions/face-liveness/:faceLivenessSessionId/complete)
+        // JWT signature already verified above; handler checks ownership via DB.
+        const db = getDb();
+        const session = db.prepare('SELECT session_token_hash FROM sessions WHERE id = ?').get(payload.sub) as
+          | { session_token_hash: string }
+          | undefined;
+        if (!session) throw new UnauthorizedError('Session not found');
+
+        const tokenHash = hashSessionToken(token);
+        if (tokenHash !== session.session_token_hash) throw new UnauthorizedError('Token revoked');
       }
-
-      // Verify token hash matches DB
-      const db = getDb();
-      const session = db.prepare('SELECT session_token_hash FROM sessions WHERE id = ?').get(sessionId) as
-        | { session_token_hash: string }
-        | undefined;
-      if (!session) throw new UnauthorizedError('Session not found');
-
-      const tokenHash = hashSessionToken(token);
-      if (tokenHash !== session.session_token_hash) throw new UnauthorizedError('Token revoked');
 
       request.sessionId = payload.sub;
       request.merchantId = payload.merchant_id;
