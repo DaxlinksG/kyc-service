@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { FaceLivenessDetector } from '@aws-amplify/ui-react-liveness';
+// FaceLivenessDetector (the wrapper) hardwires fetchAuthSession() as its credential
+// provider and ignores the credentialProvider prop — it only passes it through config.
+// FaceLivenessDetectorCore is what the wrapper renders internally; it accepts
+// credentialProvider directly without touching Amplify Auth.
+import { FaceLivenessDetectorCore as FaceLivenessDetector } from '@aws-amplify/ui-react-liveness';
 import '@aws-amplify/ui-react/styles.css';
 import type { SessionClient } from '../api/sessionClient.js';
 
