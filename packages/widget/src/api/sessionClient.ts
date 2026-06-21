@@ -12,6 +12,7 @@ export interface LivenessSessionData {
   region: string;
   access_key_id: string;
   secret_access_key: string;
+  session_token: string;
 }
 
 export class SessionClient {

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { RekognitionClient, CreateFaceLivenessSessionCommand } from '@aws-sdk/client-rekognition';
+import { STSClient, GetSessionTokenCommand } from '@aws-sdk/client-sts';
 import { getDb } from '../../db/client.js';
 import { SessionService } from '../../services/SessionService.js';
 import { LivenessService } from '../../services/LivenessService.js';
@@ -8,6 +9,7 @@ import { env } from '../../config/env.js';
 import { nanoid } from 'nanoid';
 
 const rekognition = new RekognitionClient({ region: env.AWS_REGION });
+const sts = new STSClient({ region: env.AWS_REGION });
 const sessionService = new SessionService();
 const livenessService = new LivenessService();
 
@@ -37,8 +39,9 @@ Pass these to the liveness iframe/widget. When the check completes, the widget w
           properties: {
             face_liveness_session_id: { type: 'string', example: 'abc123-def456' },
             region: { type: 'string', example: 'us-east-1' },
-            access_key_id: { type: 'string', description: 'Scoped to StartFaceLivenessSession only' },
-            secret_access_key: { type: 'string', description: 'Scoped to StartFaceLivenessSession only' },
+            access_key_id: { type: 'string' },
+            secret_access_key: { type: 'string' },
+            session_token: { type: 'string' },
           },
         },
       },
@@ -61,11 +64,19 @@ Pass these to the liveness iframe/widget. When the check completes, the widget w
       sessionService.transition(req.params.id, 'selfie_submitted');
     }
 
+    // Generate short-lived STS credentials (15 min) so the browser signs the
+    // WebSocket with the same AWS identity that created the session.
+    // Using a separate scoped IAM user fails because AWS ties the liveness session
+    // to the creator identity — StartFaceLivenessSession must use the same account.
+    const stsResult = await sts.send(new GetSessionTokenCommand({ DurationSeconds: 900 }));
+    const creds = stsResult.Credentials!;
+
     return reply.status(201).send({
       face_liveness_session_id: faceLivenessSessionId,
       region: env.AWS_REGION,
-      access_key_id: env.AWS_LIVENESS_ACCESS_KEY_ID,
-      secret_access_key: env.AWS_LIVENESS_SECRET_ACCESS_KEY,
+      access_key_id: creds.AccessKeyId!,
+      secret_access_key: creds.SecretAccessKey!,
+      session_token: creds.SessionToken!,
     });
   });
 

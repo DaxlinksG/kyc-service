@@ -20,6 +20,7 @@ interface LivenessSession {
   region: string;
   access_key_id: string;
   secret_access_key: string;
+  session_token: string;
 }
 
 export function SelfieStep({ client, onNext, onError }: Props) {
@@ -97,6 +98,7 @@ export function SelfieStep({ client, onNext, onError }: Props) {
               credentialProvider: async () => ({
                 accessKeyId: session.access_key_id,
                 secretAccessKey: session.secret_access_key,
+                sessionToken: session.session_token,
               }),
             }}
             disableStartScreen={false}
