@@ -68,7 +68,7 @@ export function App({ sessionToken, apiBaseUrl, onComplete, onError }: AppProps)
         {step === 'selfie' && <SelfieStep client={client} onNext={advance} onError={onError} />}
         {step === 'address' && <AddressStep client={client} onNext={advance} onError={onError} />}
         {step === 'processing' && <ProcessingStep client={client} onResult={showResult} />}
-        {step === 'result' && result && <ResultStep state={result.state} />}
+        {step === 'result' && result && <ResultStep state={result.state} onComplete={() => onComplete(result.state)} />}
       </div>
     </div>
   );

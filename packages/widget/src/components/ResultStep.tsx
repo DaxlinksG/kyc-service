@@ -23,13 +23,25 @@ const RESULTS: Record<string, { svg: string; title: string; msg: string }> = {
   },
 };
 
-export function ResultStep({ state }: { state: string }) {
+interface ResultStepProps {
+  state: string;
+  onComplete: () => void;
+}
+
+export function ResultStep({ state, onComplete }: ResultStepProps) {
   const c = RESULTS[state] ?? RESULTS['rejected']!;
   return (
     <div className="kyc-result-center">
       <div className="kyc-result-icon" dangerouslySetInnerHTML={{ __html: c.svg }} />
       <h2>{c.title}</h2>
       <p style={{ marginTop: 10, color: 'var(--kyc-text-muted)', lineHeight: 1.5 }}>{c.msg}</p>
+      <button
+        className="kyc-btn kyc-btn-primary"
+        style={{ marginTop: 24 }}
+        onClick={onComplete}
+      >
+        Continue
+      </button>
     </div>
   );
 }
