@@ -34,13 +34,26 @@ export class RiskScoringService {
     if (document && documentConfidence < 0.1) hardFails.push('document_unreadable');
     if (livenessScore > 0 && livenessScore < 0.3) hardFails.push('liveness_check_failed');
 
+    // Passport MUST have MRZ — no MRZ means it's not a passport (or is fraudulent)
+    if (document?.document_type === 'PASSPORT' && docParsed?.mrzDetected === false) {
+      hardFails.push('passport_no_mrz');
+    }
+
+    // Address name match of 0 when an address check was completed means the name on the
+    // address doc doesn't match the ID at all — weight the address score by both
+    // OCR confidence AND name match so a 0% name match tanks the address contribution.
+    const addressConfidence = address?.confidence ?? 0;
+    const effectiveAddressScore = address
+      ? addressConfidence * addressNameMatch  // both must be non-zero to contribute
+      : 0;
+
     const baseScore =
       hardFails.length > 0
         ? 0
         : documentConfidence * 0.35 +
           livenessScore * 0.30 +
           matchScore * 0.25 +
-          addressNameMatch * 0.10;
+          effectiveAddressScore * 0.10;
 
     let decision: RiskScore['decision'];
     if (baseScore >= env.RISK_APPROVE_THRESHOLD) {

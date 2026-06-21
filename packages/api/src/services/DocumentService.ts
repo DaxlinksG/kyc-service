@@ -74,15 +74,22 @@ export class DocumentService {
 
           // Parse structured fields from printed text (driver's license, national ID)
           const idData = parseIdDocument(rawText);
-          const hasData = !!(idData.fullName || idData.documentNumber || idData.dateOfBirth);
+          const fieldCount = [idData.fullName, idData.documentNumber, idData.dateOfBirth]
+            .filter(Boolean).length;
           parsed = {
             mrzDetected: false,
             ...idData,
           };
-          // Boost confidence if we extracted useful fields
-          confidence = hasData
-            ? Math.max(0.55, fullResult.data.confidence / 100)
-            : fullResult.data.confidence / 100;
+          // Confidence is based on how many ID fields were actually extracted,
+          // NOT Tesseract's OCR confidence (which measures text clarity, not document validity).
+          // A selfie or random photo may score high OCR confidence but extract zero ID fields.
+          if (fieldCount === 0) {
+            confidence = 0.05; // No ID data found — hard fail in risk scoring
+          } else if (fieldCount === 1) {
+            confidence = 0.45; // Minimal data — manual review territory
+          } else {
+            confidence = 0.55 + (fullResult.data.confidence / 100) * 0.15; // 55–70% range
+          }
         }
       } finally {
         await worker.terminate();
