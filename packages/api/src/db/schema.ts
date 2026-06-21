@@ -3,7 +3,22 @@ import type { SessionState, JobType, WebhookEvent } from '../config/constants.js
 export interface DbMerchant {
   id: string;
   name: string;
+  pep_screening_enabled: number; // 0|1
   created_at: number;
+}
+
+export interface DbPepCheck {
+  id: string;
+  session_id: string;
+  status: 'PENDING' | 'DONE' | 'FAILED';
+  result: 'clear' | 'pep_hit' | 'sanctions_hit' | null;
+  matched_entry_id: string | null;
+  matched_name: string | null;
+  matched_list: string | null;
+  match_score: number | null;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface DbApiKey {

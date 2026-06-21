@@ -55,6 +55,8 @@ export const JOB_TYPES = [
   'PROCESS_ADDRESS',
   'SCORE_SESSION',
   'DELIVER_WEBHOOK',
+  'SCREEN_PEP',
+  'SYNC_PEP_LISTS',
 ] as const;
 
 export type JobType = (typeof JOB_TYPES)[number];

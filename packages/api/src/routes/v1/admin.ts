@@ -5,11 +5,13 @@ import { ForbiddenError } from '../../types/errors.js';
 import { SessionService } from '../../services/SessionService.js';
 import { RiskScoringService } from '../../services/RiskScoringService.js';
 import { WebhookService } from '../../services/WebhookService.js';
+import { PepSyncService } from '../../services/PepSyncService.js';
 import { enqueueJob } from '../../workers/queue.js';
 
 const sessionService = new SessionService();
 const riskService = new RiskScoringService();
 const webhookService = new WebhookService();
+const pepSyncService = new PepSyncService();
 
 function adminOnly(request: any) {
   if (request.merchantId !== '__admin__') throw new ForbiddenError('Admin access required');
@@ -324,6 +326,102 @@ export default async function adminRoutes(app: FastifyInstance) {
     if (exists) return reply.status(409).send({ error: { code: 'CONFLICT', message: 'Merchant already exists' } });
     db.prepare('INSERT INTO merchants (id, name) VALUES (?, ?)').run(body.id, body.name);
     return reply.status(201).send({ id: body.id, name: body.name });
+  });
+
+  // PATCH /admin/merchants/:id — update merchant settings (e.g. enable PEP screening)
+  app.patch<{ Params: { id: string } }>('/admin/merchants/:id', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'Update merchant settings',
+      description: 'Update merchant feature flags. Currently supports toggling PEP/sanctions screening (billed as an add-on). Requires master API key.',
+      security: [{ ApiKey: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Merchant ID', example: 'zeeh-africa' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          pep_screening_enabled: {
+            type: 'boolean',
+            description: 'Enable PEP and sanctions list screening for all sessions from this merchant.',
+          },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            pep_screening_enabled: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    adminOnly(req);
+    const body = z.object({
+      pep_screening_enabled: z.boolean().optional(),
+    }).parse(req.body);
+
+    const db = getDb();
+    const merchant = db.prepare('SELECT * FROM merchants WHERE id = ?').get(req.params.id) as any;
+    if (!merchant) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Merchant not found' } });
+
+    if (body.pep_screening_enabled !== undefined) {
+      db.prepare('UPDATE merchants SET pep_screening_enabled = ? WHERE id = ?').run(body.pep_screening_enabled ? 1 : 0, req.params.id);
+    }
+
+    const updated = db.prepare('SELECT * FROM merchants WHERE id = ?').get(req.params.id) as any;
+    return reply.send({
+      id: updated.id,
+      name: updated.name,
+      pep_screening_enabled: !!updated.pep_screening_enabled,
+    });
+  });
+
+  // GET /admin/pep/status — list sync status for all PEP lists
+  app.get('/admin/pep/status', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'PEP list sync status',
+      description: 'Returns the last successful sync date and entry count for each sanctions/PEP list. Requires master API key.',
+      security: [{ ApiKey: [] }],
+    },
+  }, async (req, reply) => {
+    adminOnly(req);
+    const db = getDb();
+    const syncInfo = pepSyncService.getLastSyncInfo();
+    const totalEntries = (db.prepare('SELECT COUNT(*) as n FROM pep_entries').get() as any).n;
+    return reply.send({ lists: syncInfo, total_entries: totalEntries });
+  });
+
+  // POST /admin/pep/sync — trigger an immediate re-sync of all PEP lists
+  app.post('/admin/pep/sync', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'Trigger PEP list sync',
+      description: 'Enqueues an immediate re-download and re-index of OFAC SDN and UN Consolidated sanctions lists. Normally runs weekly automatically. Requires master API key.',
+      security: [{ ApiKey: [] }],
+      response: {
+        202: {
+          type: 'object',
+          properties: {
+            queued: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    adminOnly(req);
+    enqueueJob('SYNC_PEP_LISTS', {});
+    return reply.status(202).send({ queued: true });
   });
 
   // GET /admin/jobs — job queue status

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { SessionService } from '../../services/SessionService.js';
 import { RiskScoringService } from '../../services/RiskScoringService.js';
 import { getDb } from '../../db/client.js';
-import type { DbDocument, DbSelfieCheck, DbAddressCheck } from '../../db/schema.js';
+import type { DbDocument, DbSelfieCheck, DbAddressCheck, DbPepCheck } from '../../db/schema.js';
 
 const sessionService = new SessionService();
 const riskService = new RiskScoringService();
@@ -109,6 +109,18 @@ const sessionDetailSchema = {
             hardFails: { type: 'array', items: { type: 'string' }, description: 'List of hard-fail conditions that forced score to 0.' },
           },
         },
+      },
+    },
+    pep_check: {
+      type: 'object',
+      nullable: true,
+      description: 'Present only if the merchant has PEP/sanctions screening enabled.',
+      properties: {
+        status: { type: 'string', enum: ['PENDING', 'DONE', 'FAILED'] },
+        result: { type: 'string', nullable: true, enum: ['clear', 'pep_hit', 'sanctions_hit'], description: '`clear` = no match · `pep_hit` = politically exposed person → manual review · `sanctions_hit` = hard fail → rejected' },
+        matched_name: { type: 'string', nullable: true },
+        matched_list: { type: 'string', nullable: true, description: '`OFAC_SDN` or `UN_CONSOLIDATED`' },
+        match_score: { type: 'number', nullable: true },
       },
     },
   },
@@ -225,6 +237,8 @@ function formatSession(sessionId: string) {
     .get(sessionId) as DbSelfieCheck | undefined;
   const address = db.prepare('SELECT * FROM address_checks WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
     .get(sessionId) as DbAddressCheck | undefined;
+  const pepCheck = db.prepare('SELECT * FROM pep_checks WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
+    .get(sessionId) as DbPepCheck | undefined;
 
   const result: Record<string, unknown> = {
     id: session.id,
@@ -272,6 +286,16 @@ function formatSession(sessionId: string) {
 
   if (['approved', 'rejected', 'manual_review'].includes(session.state)) {
     result['risk_score'] = riskService.score(sessionId);
+  }
+
+  if (pepCheck) {
+    result['pep_check'] = {
+      status: pepCheck.status,
+      result: pepCheck.result ?? null,
+      matched_name: pepCheck.matched_name ?? null,
+      matched_list: pepCheck.matched_list ?? null,
+      match_score: pepCheck.match_score ?? null,
+    };
   }
 
   return result;

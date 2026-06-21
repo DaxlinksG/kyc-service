@@ -1,5 +1,5 @@
 import { getDb } from '../db/client.js';
-import type { DbDocument, DbSelfieCheck, DbAddressCheck, DbSession } from '../db/schema.js';
+import type { DbDocument, DbSelfieCheck, DbAddressCheck, DbSession, DbPepCheck } from '../db/schema.js';
 import type { RiskScore } from '../types/domain.js';
 import { env } from '../config/env.js';
 
@@ -22,6 +22,10 @@ export class RiskScoringService {
       .prepare('SELECT * FROM address_checks WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
       .get(sessionId) as DbAddressCheck | undefined;
 
+    const pepCheck = db
+      .prepare('SELECT * FROM pep_checks WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
+      .get(sessionId) as DbPepCheck | undefined;
+
     const hardFails: string[] = [];
 
     // Extract scores (default 0 if not available)
@@ -41,6 +45,12 @@ export class RiskScoringService {
     // validated in a prior approved session; only liveness is required this time)
     if (!identityReused && document?.document_type === 'PASSPORT' && docParsed?.mrzDetected === false) {
       hardFails.push('passport_no_mrz');
+    }
+
+    // PEP / sanctions screening (only present if merchant has it enabled)
+    if (pepCheck?.status === 'DONE') {
+      if (pepCheck.result === 'sanctions_hit') hardFails.push('sanctions_hit');
+      // pep_hit alone does not hard-fail — it forces manual_review via decision override below
     }
 
     // Address name match of 0 when an address check was completed means the name on the
@@ -71,6 +81,11 @@ export class RiskScoringService {
       decision = 'manual_review';
     } else {
       decision = 'rejected';
+    }
+
+    // PEP hit forces manual review regardless of score (unless already rejected/hard-failed)
+    if (decision === 'approved' && pepCheck?.result === 'pep_hit') {
+      decision = 'manual_review';
     }
 
     return {

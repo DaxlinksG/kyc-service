@@ -10,6 +10,8 @@ export type JobPayloadMap = {
   PROCESS_ADDRESS: { addressId: string; sessionId: string };
   SCORE_SESSION: { sessionId: string };
   DELIVER_WEBHOOK: { deliveryId: string };
+  SCREEN_PEP: { sessionId: string };
+  SYNC_PEP_LISTS: Record<string, never>;
 };
 
 export function enqueueJob<T extends JobType>(type: T, payload: JobPayloadMap[T]): string {

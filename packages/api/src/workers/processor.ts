@@ -4,6 +4,8 @@ import { LivenessService } from '../services/LivenessService.js';
 import { AddressService } from '../services/AddressService.js';
 import { RiskScoringService } from '../services/RiskScoringService.js';
 import { IdentityService } from '../services/IdentityService.js';
+import { PepScreeningService } from '../services/PepScreeningService.js';
+import { PepSyncService } from '../services/PepSyncService.js';
 import { SessionService } from '../services/SessionService.js';
 import { WebhookService } from '../services/WebhookService.js';
 import { enqueueJob } from './queue.js';
@@ -16,18 +18,23 @@ const livenessService = new LivenessService();
 const addressService = new AddressService();
 const riskService = new RiskScoringService();
 const identityService = new IdentityService();
+const pepService = new PepScreeningService();
+const pepSyncService = new PepSyncService();
 const webhookService = new WebhookService();
 
 export function registerAllProcessors(): void {
   registerProcessor('PROCESS_DOCUMENT', async ({ documentId, sessionId }) => {
     try {
       await documentService.process(documentId as string);
-      // After document is processed, check if MRZ matches a known approved identity.
-      // If matched, tag the session so scoring can apply reuse rules.
       const db = getDb();
-      const session = db.prepare('SELECT merchant_id FROM sessions WHERE id = ?').get(sessionId as string) as { merchant_id: string } | undefined;
+      const session = db.prepare('SELECT merchant_id, pep_screening_enabled FROM sessions s JOIN merchants m ON m.id = s.merchant_id WHERE s.id = ?').get(sessionId as string) as { merchant_id: string; pep_screening_enabled: number } | undefined;
       if (session) {
+        // Check if MRZ matches a known approved identity
         identityService.checkIdentityMatch(sessionId as string, session.merchant_id);
+        // Enqueue PEP screening if merchant has it enabled
+        if (session.pep_screening_enabled) {
+          enqueueJob('SCREEN_PEP', { sessionId: sessionId as string });
+        }
       }
     } finally {
       checkAndScoreIfReady(sessionId as string);
@@ -70,20 +77,40 @@ export function registerAllProcessors(): void {
   registerProcessor('DELIVER_WEBHOOK', async ({ deliveryId }) => {
     await webhookService.deliverWebhook(deliveryId as string);
   });
+
+  registerProcessor('SCREEN_PEP', async ({ sessionId }) => {
+    await pepService.screen(sessionId as string);
+    checkAndScoreIfReady(sessionId as string);
+  });
+
+  registerProcessor('SYNC_PEP_LISTS', async () => {
+    const result = await pepSyncService.syncAll();
+    console.log(`[PEP sync] OFAC: ${result.ofac} entries, UN: ${result.un} entries`);
+  });
 }
 
 function checkAndScoreIfReady(sessionId: string): void {
   const db = getDb();
-  const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as DbSession | undefined;
+  const session = db.prepare(`
+    SELECT s.*, m.pep_screening_enabled
+    FROM sessions s JOIN merchants m ON m.id = s.merchant_id
+    WHERE s.id = ?
+  `).get(sessionId) as (DbSession & { pep_screening_enabled: number }) | undefined;
   if (!session) return;
 
-  // Score once all three checks are terminal (DONE or FAILED — not still PROCESSING/QUEUED)
+  // Score once all checks are terminal (DONE or FAILED)
   const docTerminal = db.prepare("SELECT 1 FROM documents WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
   const selfieTerminal = db.prepare("SELECT 1 FROM selfie_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
   const addressTerminal = db.prepare("SELECT 1 FROM address_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
 
-  if (docTerminal && selfieTerminal && addressTerminal) {
-    sessionService.transition(sessionId, 'processing');
-    enqueueJob('SCORE_SESSION', { sessionId });
+  if (!docTerminal || !selfieTerminal || !addressTerminal) return;
+
+  // If PEP screening is enabled, also wait for the pep_check to complete
+  if (session.pep_screening_enabled) {
+    const pepTerminal = db.prepare("SELECT 1 FROM pep_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
+    if (!pepTerminal) return;
   }
+
+  sessionService.transition(sessionId, 'processing');
+  enqueueJob('SCORE_SESSION', { sessionId });
 }
