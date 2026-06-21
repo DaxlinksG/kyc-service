@@ -353,8 +353,9 @@ export class StepManager {
 
         const iframe = document.createElement('iframe');
         iframe.src = `${apiBase}/liveness/?${params.toString()}`;
-        iframe.style.cssText = 'width:100%;height:480px;border:none;border-radius:12px;';
-        iframe.allow = 'camera';
+        iframe.style.cssText = 'width:100%;height:520px;border:none;border-radius:12px;display:block;';
+        iframe.allow = 'camera; microphone';
+        iframe.setAttribute('allowfullscreen', '');
 
         container.innerHTML = '';
         container.appendChild(iframe);

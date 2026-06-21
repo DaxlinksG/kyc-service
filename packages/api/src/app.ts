@@ -151,8 +151,16 @@ Session tokens are obtained by creating a session from your **server** and passi
     }
 
     // Face Liveness React app — served at /liveness/
+    // Permissions-Policy header required so browsers honour camera inside the parent iframe
     const livenessDir = join(publicDir, 'liveness');
     if (existsSync(livenessDir)) {
+      app.addHook('onSend', (req, reply, _payload, done) => {
+        if (req.url.startsWith('/liveness/')) {
+          reply.header('Permissions-Policy', 'camera=*, microphone=*');
+          reply.header('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+        }
+        done();
+      });
       await app.register(staticFiles, {
         root: livenessDir,
         prefix: '/liveness/',
