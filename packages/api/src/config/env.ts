@@ -18,7 +18,10 @@ const envSchema = z.object({
   JOB_POLL_INTERVAL_MS: z.coerce.number().default(500),
   JOB_MAX_CONCURRENCY: z.coerce.number().default(4),
 
-  FACE_MATCH_THRESHOLD: z.coerce.number().default(0.5),
+  // AWS Rekognition (face match + liveness quality scoring)
+  AWS_REGION: z.string().default('us-east-1'),
+  AWS_ACCESS_KEY_ID: z.string().min(16),
+  AWS_SECRET_ACCESS_KEY: z.string().min(16),
 
   RISK_APPROVE_THRESHOLD: z.coerce.number().default(0.8),
   RISK_MANUAL_THRESHOLD: z.coerce.number().default(0.55),

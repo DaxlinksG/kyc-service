@@ -1,27 +1,11 @@
-import * as faceapi from 'face-api.js';
-import { Canvas, Image, ImageData } from 'canvas';
+import { RekognitionClient, DetectFacesCommand, CompareFacesCommand } from '@aws-sdk/client-rekognition';
 import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { getDb } from '../db/client.js';
 import type { DbSelfieCheck, DbDocument } from '../db/schema.js';
-import { preprocessForFace } from '../lib/imagePreprocessor.js';
 import { env } from '../config/env.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const MODELS_PATH = join(__dirname, '../../models/face-api');
-
-let modelsLoaded = false;
-
-async function ensureModels(): Promise<void> {
-  if (modelsLoaded) return;
-  // Patch face-api.js to work in Node.js with canvas
-  faceapi.env.monkeyPatch({ Canvas, Image, ImageData } as any);
-  await faceapi.nets.tinyFaceDetector.loadFromDisk(MODELS_PATH);
-  await faceapi.nets.faceLandmark68Net.loadFromDisk(MODELS_PATH);
-  await faceapi.nets.faceRecognitionNet.loadFromDisk(MODELS_PATH);
-  modelsLoaded = true;
-}
+const rekognition = new RekognitionClient({ region: env.AWS_REGION });
 
 export class LivenessService {
   async process(selfieId: string, sessionId: string): Promise<void> {
@@ -34,48 +18,64 @@ export class LivenessService {
     if (!selfie) throw new Error(`Selfie check not found: ${selfieId}`);
 
     try {
-      await ensureModels();
+      const selfieBuffer = readFileSync(join(env.STORAGE_PATH, selfie.storage_path));
 
-      const imageBuffer = readFileSync(join(env.STORAGE_PATH, selfie.storage_path));
-      const preprocessed = await preprocessForFace(imageBuffer);
+      // ── Step 1: Detect face + quality signals ──────────────────────────────
+      const detectResult = await rekognition.send(new DetectFacesCommand({
+        Image: { Bytes: selfieBuffer },
+        Attributes: ['ALL'],
+      }));
 
-      const { createCanvas, loadImage } = await import('canvas');
-      const img = await loadImage(preprocessed);
-      const canvas = createCanvas(img.width, img.height);
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img as any, 0, 0);
+      const face = detectResult.FaceDetails?.[0];
 
-      const detection = await faceapi
-        .detectSingleFace(canvas as any, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-
-      if (!detection) {
+      if (!face) {
         db.prepare(`
           UPDATE selfie_checks SET status = 'DONE', face_detected = 0, liveness_score = 0, updated_at = ? WHERE id = ?
         `).run(now, selfieId);
         return;
       }
 
-      // Passive liveness: measure landmark geometric spread
-      const livenessScore = computeLivenessScore(detection.landmarks);
+      // ── Step 2: Liveness proxy from quality attributes ─────────────────────
+      // Sharpness catches photo-of-screen/photo attacks — real camera ≥ 50, screen/print < 30
+      // Confidence is how certain Rekognition is the region contains a real face
+      const sharpness = face.Quality?.Sharpness ?? 0;   // 0–100
+      const brightness = face.Quality?.Brightness ?? 0; // 0–100
+      const faceConfidence = face.Confidence ?? 0;       // 0–100
 
-      // Face matching against document
+      // Reject obvious spoofs via hard signal — sunglasses mask key landmarks
+      const sunglasses = face.Sunglasses?.Value === true && (face.Sunglasses?.Confidence ?? 0) > 90;
+
+      // Weighted liveness score: sharpness is the strongest anti-spoof signal
+      const rawLiveness = (sharpness * 0.55 + faceConfidence * 0.35 + brightness * 0.10) / 100;
+      const livenessScore = sunglasses ? Math.min(rawLiveness, 0.4) : Math.round(rawLiveness * 100) / 100;
+
+      // ── Step 3: Face match against ID document ─────────────────────────────
       let matchScore: number | null = null;
-      const docWithFace = db.prepare(`
-        SELECT face_descriptor FROM documents
-        WHERE session_id = ? AND face_descriptor IS NOT NULL
-        ORDER BY created_at DESC LIMIT 1
-      `).get(sessionId) as { face_descriptor: string } | undefined;
 
-      if (docWithFace) {
-        const docDescriptor = new Float32Array(JSON.parse(docWithFace.face_descriptor));
-        const distance = faceapi.euclideanDistance(
-          Array.from(detection.descriptor),
-          Array.from(docDescriptor),
-        );
-        // Convert distance to 0-1 match score (lower distance = better match)
-        matchScore = Math.max(0, 1 - distance / env.FACE_MATCH_THRESHOLD);
+      const docRow = db.prepare(`
+        SELECT storage_path FROM documents
+        WHERE session_id = ? AND side = 'FRONT' AND status = 'DONE'
+        ORDER BY created_at DESC LIMIT 1
+      `).get(sessionId) as Pick<DbDocument, 'storage_path'> | undefined;
+
+      if (docRow) {
+        try {
+          const docBuffer = readFileSync(join(env.STORAGE_PATH, docRow.storage_path));
+
+          const compareResult = await rekognition.send(new CompareFacesCommand({
+            SourceImage: { Bytes: docBuffer },   // ID document (source of truth)
+            TargetImage: { Bytes: selfieBuffer }, // selfie to verify
+            SimilarityThreshold: 0,              // return all matches so we can score them ourselves
+          }));
+
+          const topMatch = compareResult.FaceMatches?.[0];
+          // Similarity is 0–100; normalize to 0–1
+          matchScore = topMatch ? Math.round((topMatch.Similarity ?? 0)) / 100 : 0;
+        } catch (err) {
+          // CompareFaces throws InvalidParameterException when no face is found in source/target
+          // Treat as no match rather than crashing the job
+          matchScore = 0;
+        }
       }
 
       db.prepare(`
@@ -83,6 +83,7 @@ export class LivenessService {
         SET status = 'DONE', face_detected = 1, liveness_score = ?, match_score = ?, updated_at = ?
         WHERE id = ?
       `).run(livenessScore, matchScore, now, selfieId);
+
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       db.prepare("UPDATE selfie_checks SET status = 'FAILED', error = ?, updated_at = ? WHERE id = ?").run(
@@ -91,30 +92,4 @@ export class LivenessService {
       throw err;
     }
   }
-}
-
-/** Compute a liveness score (0-1) based on facial landmark geometric variation. */
-function computeLivenessScore(landmarks: faceapi.FaceLandmarks68): number {
-  const positions = landmarks.positions;
-  if (positions.length < 68) return 0;
-
-  // Compute variance of x and y coordinates
-  const xs = positions.map((p) => p.x);
-  const ys = positions.map((p) => p.y);
-
-  const varX = variance(xs);
-  const varY = variance(ys);
-
-  // Very uniform (near-zero variance ratio) suggests a flat photo
-  const totalVar = varX + varY;
-  if (totalVar < 1) return 0.1; // suspiciously uniform
-
-  // Normalize: a real face should have reasonable spread
-  const score = Math.min(1, totalVar / 5000);
-  return Math.round(score * 100) / 100;
-}
-
-function variance(arr: number[]): number {
-  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
-  return arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length;
 }

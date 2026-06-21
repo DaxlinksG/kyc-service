@@ -1,5 +1,5 @@
 import { createWorker } from 'tesseract.js';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 import { getDb } from '../db/client.js';
 import type { DbDocument } from '../db/schema.js';
@@ -88,6 +88,8 @@ export class DocumentService {
         await worker.terminate();
       }
 
+      // face_descriptor column kept in schema for backward compat but no longer used —
+      // face matching is now handled by Rekognition CompareFaces in LivenessService
       db.prepare(`
         UPDATE documents
         SET status = 'DONE', ocr_raw = ?, ocr_parsed = ?, confidence = ?, updated_at = ?

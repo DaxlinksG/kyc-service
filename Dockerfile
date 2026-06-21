@@ -2,8 +2,6 @@
 FROM node:20-alpine AS admin-build
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++ cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev vips-dev
-
 COPY package.json package-lock.json ./
 COPY packages/admin/package.json ./packages/admin/
 COPY packages/widget/package.json ./packages/widget/
@@ -24,10 +22,9 @@ RUN mkdir -p packages/api/public/widget && \
 FROM node:20-alpine AS production
 WORKDIR /app
 
-# Build deps for native modules (canvas, better-sqlite3, sharp)
+# Native build deps: sharp (vips) + better-sqlite3 only — canvas/cairo removed
 RUN apk add --no-cache \
     python3 make g++ \
-    cairo-dev pango-dev jpeg-dev giflib-dev librsvg-dev pixman-dev \
     vips-dev
 
 # Install all deps (need devDeps for tsc)
@@ -41,9 +38,6 @@ COPY packages/api ./packages/api
 COPY packages/sdk ./packages/sdk
 COPY tsconfig.base.json ./
 
-# Copy face-api model files into dist location
-RUN mkdir -p packages/api/dist/models/face-api
-
 # Copy built admin dashboard into API's public folder
 COPY --from=admin-build /app/packages/api/public ./packages/api/public
 
@@ -52,9 +46,6 @@ RUN npm run build --workspace=packages/api
 
 # Copy SQL migrations (not emitted by tsc)
 RUN cp -r packages/api/src/db/migrations packages/api/dist/db/migrations
-
-# Copy face-api models into dist (needed at runtime)
-RUN cp -r packages/api/models/face-api packages/api/dist/models/face-api
 
 # Prune devDeps after build
 RUN npm prune --workspaces --omit=dev
