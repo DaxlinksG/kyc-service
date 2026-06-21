@@ -5,24 +5,18 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/admin/package.json ./packages/admin/
 COPY packages/widget/package.json ./packages/widget/
-COPY packages/liveness/package.json ./packages/liveness/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/api/package.json ./packages/api/
 RUN npm install --workspaces
 COPY packages/admin ./packages/admin
 COPY packages/widget ./packages/widget
-COPY packages/liveness ./packages/liveness
 COPY packages/sdk ./packages/sdk
 COPY tsconfig.base.json ./
 RUN npm run build --workspace=packages/admin
 RUN npm run build --workspace=packages/widget
-RUN npm run build --workspace=packages/liveness
 # Copy widget JS into API's public/widget folder (served at /widget/kyc-widget.js)
 RUN mkdir -p packages/api/public/widget && \
     cp packages/widget/dist/kyc-widget.iife.js packages/api/public/widget/kyc-widget.js
-# Copy liveness app into API's public folder (served at /liveness/)
-RUN mkdir -p packages/api/public/liveness && \
-    cp -r packages/liveness/dist/. packages/api/public/liveness/
 
 # ---- Production API ----
 FROM node:20-alpine AS production

@@ -7,6 +7,13 @@ export interface SessionStatus {
   risk_score?: { score: number; decision: string };
 }
 
+export interface LivenessSessionData {
+  face_liveness_session_id: string;
+  region: string;
+  access_key_id: string;
+  secret_access_key: string;
+}
+
 export class SessionClient {
   constructor(
     private readonly sessionToken: string,
@@ -28,40 +35,43 @@ export class SessionClient {
     form.append('file', file);
     form.append('document_type', documentType);
     form.append('side', side);
-    await this.fetch(`/v1/sessions/${this.sessionId}/documents`, { method: 'POST', body: form });
+    await this.request(`/v1/sessions/${this.sessionId}/documents`, { method: 'POST', body: form });
   }
 
   async uploadSelfie(file: File): Promise<void> {
     const form = new FormData();
     form.append('file', file);
-    await this.fetch(`/v1/sessions/${this.sessionId}/selfie`, { method: 'POST', body: form });
+    await this.request(`/v1/sessions/${this.sessionId}/selfie`, { method: 'POST', body: form });
   }
 
   async uploadAddress(file: File, documentType: string): Promise<void> {
     const form = new FormData();
     form.append('file', file);
     form.append('document_type', documentType);
-    await this.fetch(`/v1/sessions/${this.sessionId}/address`, { method: 'POST', body: form });
+    await this.request(`/v1/sessions/${this.sessionId}/address`, { method: 'POST', body: form });
   }
 
   async getStatus(): Promise<SessionStatus> {
-    return this.fetch<SessionStatus>(`/v1/sessions/${this.sessionId}/status`);
+    return this.request<SessionStatus>(`/v1/sessions/${this.sessionId}/status`);
   }
 
-  async createFaceLivenessSession(sessionId: string): Promise<{
-    face_liveness_session_id: string;
-    region: string;
-    access_key_id: string;
-    secret_access_key: string;
-  }> {
-    return this.fetch(`/v1/sessions/${sessionId}/face-liveness`, { method: 'POST' });
+  /** Creates an AWS Face Liveness session, returns credentials scoped to StartFaceLivenessSession only. */
+  async createFaceLivenessSession(): Promise<LivenessSessionData> {
+    return this.request<LivenessSessionData>(
+      `/v1/sessions/${this.sessionId}/face-liveness`,
+      { method: 'POST' },
+    );
   }
 
-  getSessionId(): string { return this.sessionId; }
-  getSessionToken(): string { return this.sessionToken; }
-  getApiBase(): string { return this.apiBaseUrl; }
+  /** Notifies the server that the liveness session is complete — triggers PROCESS_SELFIE job. */
+  async completeFaceLivenessSession(faceLivenessSessionId: string): Promise<void> {
+    await this.request(
+      `/v1/sessions/face-liveness/${faceLivenessSessionId}/complete`,
+      { method: 'POST' },
+    );
+  }
 
-  private async fetch<T = void>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T = void>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await globalThis.fetch(`${this.apiBaseUrl}${path}`, {
       ...init,
       headers: {
