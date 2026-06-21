@@ -18,7 +18,30 @@ function adminOnly(request: any) {
 export default async function adminRoutes(app: FastifyInstance) {
 
   // GET /admin/metrics — overview stats
-  app.get('/admin/metrics', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.get('/admin/metrics', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'Platform metrics',
+      description: 'Returns aggregate KYC session statistics across all merchants. Requires master API key.',
+      security: [{ ApiKey: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            total_sessions: { type: 'number', example: 1240 },
+            sessions_today: { type: 'number', example: 37 },
+            approved: { type: 'number', example: 980 },
+            rejected: { type: 'number', example: 180 },
+            manual_review: { type: 'number', example: 42 },
+            processing: { type: 'number', example: 12 },
+            pending_jobs: { type: 'number', example: 3 },
+            total_merchants: { type: 'number', example: 8 },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
     adminOnly(req);
     const db = getDb();
 
@@ -47,7 +70,24 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // GET /admin/sessions — paginated list with filters
-  app.get('/admin/sessions', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.get('/admin/sessions', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'List all sessions',
+      description: 'Paginated list of KYC sessions across all merchants. Filterable by state and merchant. Requires master API key.',
+      security: [{ ApiKey: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'number', default: 1, description: 'Page number' },
+          limit: { type: 'number', default: 20, description: 'Results per page (max 100)' },
+          state: { type: 'string', enum: ['created', 'processing', 'approved', 'rejected', 'manual_review', 'expired'], description: 'Filter by session state' },
+          merchant_id: { type: 'string', description: 'Filter by merchant', example: 'acme-corp' },
+        },
+      },
+    },
+  }, async (req, reply) => {
     adminOnly(req);
     const query = z.object({
       page: z.coerce.number().default(1),
@@ -89,7 +129,21 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // GET /admin/sessions/:id — full detail
-  app.get<{ Params: { id: string } }>('/admin/sessions/:id', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.get<{ Params: { id: string } }>('/admin/sessions/:id', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'Get full session detail',
+      description: 'Returns the complete session record including document OCR data, selfie scores, address check, risk score breakdown, and audit trail. Requires master API key.',
+      security: [{ ApiKey: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
+        },
+      },
+    },
+  }, async (req, reply) => {
     adminOnly(req);
     const db = getDb();
     const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.id) as any;
@@ -114,7 +168,42 @@ export default async function adminRoutes(app: FastifyInstance) {
   // POST /admin/sessions/:id/approve — manual override
   app.post<{ Params: { id: string } }>('/admin/sessions/:id/approve', {
     preHandler: [(app as any).verifyMerchantAuth],
-    schema: { body: { type: 'object' } },
+    schema: {
+      tags: ['Admin'],
+      summary: 'Manually approve a session',
+      description: 'Override the automated decision and approve a session. Only valid for sessions in `manual_review` or `processing` state. Triggers the `session.approved` webhook.',
+      security: [{ ApiKey: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          note: {
+            type: 'string',
+            description: 'Optional internal note recorded in the audit log',
+            example: 'Document quality confirmed by ops team',
+          },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'ses_abc123' },
+            state: { type: 'string', example: 'approved' },
+          },
+        },
+        409: {
+          description: 'Session is not in an approvable state',
+          type: 'object',
+          properties: { error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } } },
+        },
+      },
+    },
   }, async (req, reply) => {
     adminOnly(req);
     const session = sessionService.getById(req.params.id);
@@ -129,7 +218,42 @@ export default async function adminRoutes(app: FastifyInstance) {
   // POST /admin/sessions/:id/reject — manual override
   app.post<{ Params: { id: string } }>('/admin/sessions/:id/reject', {
     preHandler: [(app as any).verifyMerchantAuth],
-    schema: { body: { type: 'object' } },
+    schema: {
+      tags: ['Admin'],
+      summary: 'Manually reject a session',
+      description: 'Override the automated decision and reject a session. Only valid for sessions in `manual_review` or `processing` state. Triggers the `session.rejected` webhook.',
+      security: [{ ApiKey: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          reason: {
+            type: 'string',
+            description: 'Reason for rejection — recorded in audit log and optionally sent to the merchant via webhook',
+            example: 'Document appears altered — expiry date inconsistent with MRZ',
+          },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'ses_abc123' },
+            state: { type: 'string', example: 'rejected' },
+          },
+        },
+        409: {
+          description: 'Session is not in a rejectable state',
+          type: 'object',
+          properties: { error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } } },
+        },
+      },
+    },
   }, async (req, reply) => {
     adminOnly(req);
     const session = sessionService.getById(req.params.id);
@@ -142,7 +266,15 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // GET /admin/merchants — list all merchants + key count
-  app.get('/admin/merchants', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.get('/admin/merchants', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'List merchants',
+      description: 'Returns all registered merchants with their active API key count and total session count. Requires master API key.',
+      security: [{ ApiKey: [] }],
+    },
+  }, async (req, reply) => {
     adminOnly(req);
     const db = getDb();
     const merchants = db.prepare(`
@@ -159,7 +291,32 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // POST /admin/merchants — create merchant
-  app.post('/admin/merchants', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.post('/admin/merchants', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'Create a merchant',
+      description: 'Registers a new merchant. After creating a merchant, issue them an API key via `POST /v1/api-keys`. Requires master API key.',
+      security: [{ ApiKey: [] }],
+      body: {
+        type: 'object',
+        required: ['id', 'name'],
+        properties: {
+          id: { type: 'string', description: 'Unique merchant identifier (slug-style, no spaces)', example: 'acme-corp' },
+          name: { type: 'string', description: 'Human-readable merchant name', example: 'Acme Corporation' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'acme-corp' },
+            name: { type: 'string', example: 'Acme Corporation' },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
     adminOnly(req);
     const body = z.object({ id: z.string().min(3), name: z.string() }).parse(req.body);
     const db = getDb();
@@ -170,7 +327,15 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   // GET /admin/jobs — job queue status
-  app.get('/admin/jobs', { preHandler: [(app as any).verifyMerchantAuth] }, async (req, reply) => {
+  app.get('/admin/jobs', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Admin'],
+      summary: 'Job queue status',
+      description: 'Returns job queue counts by status and the 20 most recent jobs. Useful for monitoring processing backlogs. Requires master API key.',
+      security: [{ ApiKey: [] }],
+    },
+  }, async (req, reply) => {
     adminOnly(req);
     const db = getDb();
     const byStatus = db.prepare("SELECT status, COUNT(*) as n FROM jobs GROUP BY status").all();
