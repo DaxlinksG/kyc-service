@@ -38,6 +38,7 @@ Pass these to the liveness iframe/widget. When the check completes, the widget w
             face_liveness_session_id: { type: 'string', example: 'abc123-def456' },
             region: { type: 'string', example: 'us-east-1' },
             access_key_id: { type: 'string', description: 'Scoped to StartFaceLivenessSession only' },
+            secret_access_key: { type: 'string', description: 'Scoped to StartFaceLivenessSession only' },
           },
         },
       },
