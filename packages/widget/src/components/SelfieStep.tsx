@@ -82,7 +82,11 @@ export function SelfieStep({ client, onNext, onError }: Props) {
             sessionId={session.face_liveness_session_id}
             region={session.region}
             onAnalysisComplete={handleAnalysisComplete}
-            onError={(err) => handleError(err.state instanceof Error ? err.state : new Error(String(err.state)))}
+            onError={(err) => {
+              // err.state is a LivenessErrorState string; err.error may have the underlying cause
+              const detail = err.error?.message ? ` (${err.error.message})` : '';
+              handleError(new Error(`${String(err.state)}${detail}`));
+            }}
             credentialProvider={async () => ({
               accessKeyId: session.access_key_id,
               secretAccessKey: session.secret_access_key,
