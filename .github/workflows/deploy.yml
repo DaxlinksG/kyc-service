@@ -21,9 +21,11 @@ jobs:
           script: |
             set -e
 
-            # Pull latest code
+            # Pull latest code (stash local env overrides — docker-compose.yml, nginx.conf)
             cd /opt/kyc-service
+            git stash
             git pull origin main
+            git stash pop || true
 
             # Rebuild and restart containers (zero-downtime)
             docker compose build --no-cache api
