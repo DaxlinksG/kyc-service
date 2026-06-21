@@ -83,6 +83,7 @@ export function SelfieStep({ client, onNext, onError }: Props) {
 
         {phase === 'ready' && session && (
           <FaceLivenessDetector
+            key={session.face_liveness_session_id}
             sessionId={session.face_liveness_session_id}
             region={session.region}
             onAnalysisComplete={handleAnalysisComplete}
