@@ -121,7 +121,12 @@ export default fp(async function authPlugin(app: FastifyInstance) {
       const payload = verifySessionToken(token);
       const sessionId = (request.params as Record<string, string>)['id'];
 
-      if (payload.sub !== sessionId) throw new ForbiddenError('Token not valid for this session');
+      // Only enforce session-id matching on routes that have an :id param.
+      // Routes like /sessions/face-liveness/:faceLivenessSessionId/complete don't
+      // have :id — the handler is responsible for verifying ownership there.
+      if (sessionId !== undefined && payload.sub !== sessionId) {
+        throw new ForbiddenError('Token not valid for this session');
+      }
 
       // Verify token hash matches DB
       const db = getDb();

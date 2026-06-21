@@ -105,6 +105,7 @@ Pass these to the liveness iframe/widget. When the check completes, the widget w
       `).get(req.params.faceLivenessSessionId) as { id: string; session_id: string } | undefined;
 
       if (!row) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Liveness session not found' } });
+      if (row.session_id !== req.sessionId) return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Token not valid for this session' } });
 
       enqueueJob('PROCESS_SELFIE', { selfieId: row.id, sessionId: row.session_id });
 
