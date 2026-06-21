@@ -87,14 +87,17 @@ export function SelfieStep({ client, onNext, onError }: Props) {
             region={session.region}
             onAnalysisComplete={handleAnalysisComplete}
             onError={(err) => {
-              // err.state is a LivenessErrorState string; err.error may have the underlying cause
               const detail = err.error?.message ? ` (${err.error.message})` : '';
               handleError(new Error(`${String(err.state)}${detail}`));
             }}
-            credentialProvider={async () => ({
-              accessKeyId: session.access_key_id,
-              secretAccessKey: session.secret_access_key,
-            })}
+            config={{
+              // credentialProvider lives inside FaceLivenessDetectorCoreConfig,
+              // not as a top-level prop — passing it top-level is silently ignored.
+              credentialProvider: async () => ({
+                accessKeyId: session.access_key_id,
+                secretAccessKey: session.secret_access_key,
+              }),
+            }}
             disableStartScreen={false}
           />
         )}
