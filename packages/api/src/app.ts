@@ -141,8 +141,15 @@ Session tokens are obtained by creating a session from your **server** and passi
       prefix: '/admin/',
     });
     // Widget JS — served at /widget/kyc-widget.js
+    // no-cache so browsers always revalidate after a deploy (ETag still avoids full re-download)
     const widgetDir = join(publicDir, 'widget');
     if (existsSync(widgetDir)) {
+      app.addHook('onSend', (req, reply, _payload, done) => {
+        if (req.url.startsWith('/widget/')) {
+          reply.header('Cache-Control', 'no-cache');
+        }
+        done();
+      });
       await app.register(staticFiles, {
         root: widgetDir,
         prefix: '/widget/',
