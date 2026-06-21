@@ -153,6 +153,15 @@ export default async function sessionRoutes(app: FastifyInstance) {
                 address_match_score: { type: 'number' },
               },
             },
+            identity_reused: {
+              type: 'boolean',
+              description: 'True when this session matched a previously approved identity — document and address steps were auto-approved, only liveness was required.',
+            },
+            identity_id: {
+              type: 'string',
+              nullable: true,
+              description: 'ID of the kyc_identities record linked to this session, if any.',
+            },
           },
         },
       },
@@ -202,6 +211,8 @@ function formatSession(sessionId: string) {
     updated_at: session.updated_at,
     expires_at: session.expires_at,
     metadata: session.metadata ? JSON.parse(session.metadata) : null,
+    identity_reused: !!session.identity_id,
+    identity_id: session.identity_id ?? null,
   };
 
   if (doc) {

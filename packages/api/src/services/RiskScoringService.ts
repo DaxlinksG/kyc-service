@@ -1,11 +1,14 @@
 import { getDb } from '../db/client.js';
-import type { DbDocument, DbSelfieCheck, DbAddressCheck } from '../db/schema.js';
+import type { DbDocument, DbSelfieCheck, DbAddressCheck, DbSession } from '../db/schema.js';
 import type { RiskScore } from '../types/domain.js';
 import { env } from '../config/env.js';
 
 export class RiskScoringService {
   score(sessionId: string): RiskScore {
     const db = getDb();
+
+    const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as DbSession | undefined;
+    const identityReused = !!session?.identity_id;
 
     const document = db
       .prepare("SELECT * FROM documents WHERE session_id = ? AND side = 'FRONT' ORDER BY created_at DESC LIMIT 1")
@@ -34,8 +37,9 @@ export class RiskScoringService {
     if (document && documentConfidence < 0.1) hardFails.push('document_unreadable');
     if (livenessScore > 0 && livenessScore < 0.3) hardFails.push('liveness_check_failed');
 
-    // Passport MUST have MRZ — no MRZ means it's not a passport (or is fraudulent)
-    if (document?.document_type === 'PASSPORT' && docParsed?.mrzDetected === false) {
+    // Passport MUST have MRZ — unless identity is being reused (document already
+    // validated in a prior approved session; only liveness is required this time)
+    if (!identityReused && document?.document_type === 'PASSPORT' && docParsed?.mrzDetected === false) {
       hardFails.push('passport_no_mrz');
     }
 
@@ -47,13 +51,18 @@ export class RiskScoringService {
       ? addressConfidence * addressNameMatch  // both must be non-zero to contribute
       : 0;
 
+    // Identity reuse: document was already validated in a prior approved session.
+    // Give doc and address full marks — only liveness + face match matter today.
+    const effectiveDocConfidence = identityReused ? Math.max(documentConfidence, 0.9) : documentConfidence;
+    const effectiveAddressForScore = identityReused ? 0.9 : effectiveAddressScore;
+
     const baseScore =
       hardFails.length > 0
         ? 0
-        : documentConfidence * 0.35 +
+        : effectiveDocConfidence * 0.35 +
           livenessScore * 0.30 +
           matchScore * 0.25 +
-          effectiveAddressScore * 0.10;
+          effectiveAddressForScore * 0.10;
 
     let decision: RiskScore['decision'];
     if (baseScore >= env.RISK_APPROVE_THRESHOLD) {

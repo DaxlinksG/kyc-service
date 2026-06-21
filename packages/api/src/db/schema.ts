@@ -24,9 +24,27 @@ export interface DbSession {
   session_token_hash: string;
   metadata: string | null; // JSON
   redirect_url: string | null;
+  identity_id: string | null; // set when this session matched a known kyc_identity
   created_at: number;
   updated_at: number;
   expires_at: number;
+}
+
+export interface DbKycIdentity {
+  id: string;
+  identity_hash: string;
+  first_approved_at: number;
+  last_approved_at: number;
+  expires_at: number;
+  source_session_id: string;
+}
+
+export interface DbKycIdentitySession {
+  id: string;
+  identity_id: string;
+  session_id: string;
+  merchant_id: string;
+  linked_at: number;
 }
 
 export interface DbDocument {
