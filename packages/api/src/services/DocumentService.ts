@@ -72,23 +72,41 @@ export class DocumentService {
           const fullResult = await worker.recognize(preprocessed);
           rawText = fullResult.data.text;
 
-          // Parse structured fields from printed text (driver's license, national ID)
-          const idData = parseIdDocument(rawText);
-          const fieldCount = [idData.fullName, idData.documentNumber, idData.dateOfBirth]
-            .filter(Boolean).length;
-          parsed = {
-            mrzDetected: false,
-            ...idData,
-          };
-          // Confidence is based on how many ID fields were actually extracted,
-          // NOT Tesseract's OCR confidence (which measures text clarity, not document validity).
-          // A selfie or random photo may score high OCR confidence but extract zero ID fields.
-          if (fieldCount === 0) {
-            confidence = 0.05; // No ID data found — hard fail in risk scoring
-          } else if (fieldCount === 1) {
-            confidence = 0.45; // Minimal data — manual review territory
+          // Second MRZ attempt: try extracting MRZ from the full-page OCR text.
+          // This catches cases where the MRZ crop was too narrow (e.g., full-spread
+          // passport photos where the data page starts mid-image).
+          const mrzFromFull = extractMrzLines(fullResult.data.text);
+          const mrzFull = mrzFromFull ? parseMrz(mrzFromFull) : null;
+          if (mrzFull) {
+            parsed = {
+              firstName: mrzFull.firstName,
+              lastName: mrzFull.lastName,
+              fullName: `${mrzFull.firstName} ${mrzFull.lastName}`.trim(),
+              dateOfBirth: mrzFull.dateOfBirth,
+              documentNumber: mrzFull.documentNumber,
+              expiryDate: mrzFull.expiryDate,
+              nationality: mrzFull.nationality,
+              isExpired: mrzFull.isExpired,
+              mrzDetected: true,
+            };
+            confidence = mrzFull.checksumsValid ? 0.9 : 0.65;
           } else {
-            confidence = 0.55 + (fullResult.data.confidence / 100) * 0.15; // 55–70% range
+            // Parse structured fields from printed text (driver's license, national ID)
+            const idData = parseIdDocument(rawText);
+            const fieldCount = [idData.fullName, idData.documentNumber, idData.dateOfBirth]
+              .filter(Boolean).length;
+            parsed = {
+              mrzDetected: false,
+              ...idData,
+            };
+            // Confidence reflects how many ID fields were extracted, not OCR confidence.
+            if (fieldCount === 0) {
+              confidence = 0.05; // No ID data — hard fail in risk scoring
+            } else if (fieldCount === 1) {
+              confidence = 0.45; // Minimal data — manual review
+            } else {
+              confidence = 0.55 + (fullResult.data.confidence / 100) * 0.15;
+            }
           }
         }
       } finally {

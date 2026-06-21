@@ -34,16 +34,23 @@ export async function preprocessForFace(input: Buffer): Promise<Buffer> {
 }
 
 /**
- * Crop the bottom ~15% of a document image for MRZ detection.
+ * Crop the bottom 35% of a document image and apply heavy contrast/threshold
+ * for MRZ detection. The larger crop handles full-spread passport photos where
+ * the data page starts at ~50% of the image height. The threshold step converts
+ * the security-pattern background to pure white so Tesseract only sees the dark
+ * MRZ characters.
  */
 export async function cropMrzZone(input: Buffer): Promise<Buffer> {
   const { width = 0, height = 0 } = await sharp(input).metadata();
-  const mrzHeight = Math.floor(height * 0.28);
+  const mrzHeight = Math.floor(height * 0.35);
   const top = height - mrzHeight;
   return sharp(input)
     .extract({ left: 0, top, width, height: mrzHeight })
     .grayscale()
     .normalize()
+    // Linear stretch: push mid-tones toward white to kill the security pattern,
+    // keep dark MRZ ink. threshold(160) means pixels below 160 → black, rest → white.
+    .threshold(160)
     .png()
     .toBuffer();
 }
