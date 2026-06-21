@@ -25,6 +25,95 @@ const sessionResponseSchema = {
   },
 };
 
+const sessionDetailSchema = {
+  description: 'Session details',
+  type: 'object',
+  properties: {
+    id: { type: 'string', example: 'ses_abc123' },
+    external_id: { type: 'string', nullable: true, description: 'Your internal user ID passed at session creation.' },
+    state: {
+      type: 'string',
+      enum: ['created', 'document_submitted', 'selfie_submitted', 'address_submitted', 'processing', 'approved', 'rejected', 'manual_review', 'expired'],
+      description: '`approved` = verified ✓ · `rejected` = failed · `manual_review` = pending admin · `processing` = running checks',
+    },
+    created_at: { type: 'number', description: 'Unix timestamp.' },
+    updated_at: { type: 'number', description: 'Unix timestamp of last state change.' },
+    expires_at: { type: 'number', description: 'Unix timestamp. Session token is invalid after this.' },
+    metadata: { type: 'object', nullable: true, description: 'Arbitrary JSON stored at session creation.' },
+    identity_reused: {
+      type: 'boolean',
+      description: 'True when this session matched a previously approved identity — document and address steps were auto-approved, only liveness was required.',
+    },
+    identity_id: {
+      type: 'string',
+      nullable: true,
+      description: 'ID of the kyc_identities record linked to this session, if any.',
+    },
+    document_check: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'DONE', 'FAILED'] },
+        document_type: { type: 'string', example: 'PASSPORT' },
+        side: { type: 'string', example: 'FRONT' },
+        confidence: { type: 'number', description: '0–1. Confidence in OCR/MRZ extraction quality.' },
+        parsed: {
+          type: 'object',
+          nullable: true,
+          description: 'Extracted fields: fullName, dateOfBirth, documentNumber, expiryDate, nationality, mrzDetected.',
+        },
+      },
+    },
+    selfie_check: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'DONE', 'FAILED'] },
+        face_detected: { type: 'boolean' },
+        liveness_score: { type: 'number', description: '0–1. ≥ 0.7 = live person confirmed.' },
+        match_score: { type: 'number', description: '0–1. ≥ 0.6 = selfie matches ID document.' },
+      },
+    },
+    address_check: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: ['PENDING', 'PROCESSING', 'DONE', 'FAILED'] },
+        document_type: { type: 'string', example: 'UTILITY_BILL' },
+        name_match_score: { type: 'number', description: '0–1. How closely the name on the address doc matches the ID.' },
+        confidence: { type: 'number', description: '0–1. OCR confidence on the address document.' },
+        parsed: {
+          type: 'object',
+          nullable: true,
+          description: 'Extracted fields: fullName, address, documentDate.',
+        },
+      },
+    },
+    risk_score: {
+      type: 'object',
+      nullable: true,
+      description: 'Only present when state is `approved`, `rejected`, or `manual_review`.',
+      properties: {
+        decision: { type: 'string', enum: ['approved', 'rejected', 'manual_review'] },
+        score: { type: 'number', description: 'Weighted aggregate 0–1. ≥ 0.80 = approved · 0.55–0.79 = manual_review · < 0.55 = rejected.' },
+        factors: {
+          type: 'object',
+          properties: {
+            documentConfidence: { type: 'number' },
+            livenessScore: { type: 'number' },
+            matchScore: { type: 'number' },
+            addressNameMatch: { type: 'number' },
+            hardFails: { type: 'array', items: { type: 'string' }, description: 'List of hard-fail conditions that forced score to 0.' },
+          },
+        },
+      },
+    },
+  },
+};
+
 export default async function sessionRoutes(app: FastifyInstance) {
   // POST /v1/sessions
   app.post('/sessions', {
@@ -94,76 +183,7 @@ export default async function sessionRoutes(app: FastifyInstance) {
         },
       },
       response: {
-        200: {
-          description: 'Session details',
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            state: {
-              type: 'string',
-              enum: ['created', 'document_submitted', 'selfie_submitted', 'address_submitted', 'processing', 'approved', 'rejected', 'manual_review', 'expired'],
-              description: '`approved` = verified ✓ · `rejected` = failed · `manual_review` = pending admin · `processing` = running checks',
-            },
-            created_at: { type: 'number' },
-            expires_at: { type: 'number' },
-            metadata: { type: 'object', nullable: true },
-            document_check: {
-              type: 'object',
-              nullable: true,
-              properties: {
-                status: { type: 'string' },
-                document_type: { type: 'string' },
-                confidence: { type: 'number' },
-                parsed: {
-                  type: 'object',
-                  description: 'Extracted data: name, date_of_birth, document_number, expiry_date, nationality',
-                },
-              },
-            },
-            selfie_check: {
-              type: 'object',
-              nullable: true,
-              properties: {
-                status: { type: 'string' },
-                face_detected: { type: 'boolean' },
-                liveness_score: { type: 'number', description: '0–1. ≥ 0.7 = live person' },
-                match_score: { type: 'number', description: '0–1. ≥ 0.6 = face matches ID' },
-              },
-            },
-            address_check: {
-              type: 'object',
-              nullable: true,
-              properties: {
-                status: { type: 'string' },
-                document_type: { type: 'string' },
-                name_match_score: { type: 'number' },
-                confidence: { type: 'number' },
-              },
-            },
-            risk_score: {
-              type: 'object',
-              nullable: true,
-              description: 'Only present when state is approved / rejected / manual_review',
-              properties: {
-                decision: { type: 'string', enum: ['approved', 'rejected', 'manual_review'] },
-                score: { type: 'number', description: 'Overall score 0–1. ≥ 0.80 = approved · 0.55–0.79 = manual review · < 0.55 = rejected' },
-                document_confidence: { type: 'number' },
-                liveness_score: { type: 'number' },
-                face_match_score: { type: 'number' },
-                address_match_score: { type: 'number' },
-              },
-            },
-            identity_reused: {
-              type: 'boolean',
-              description: 'True when this session matched a previously approved identity — document and address steps were auto-approved, only liveness was required.',
-            },
-            identity_id: {
-              type: 'string',
-              nullable: true,
-              description: 'ID of the kyc_identities record linked to this session, if any.',
-            },
-          },
-        },
+        200: sessionDetailSchema,
       },
     },
   }, async (request, reply) => {
@@ -184,6 +204,9 @@ export default async function sessionRoutes(app: FastifyInstance) {
         properties: {
           id: { type: 'string', example: 'ses_abc123' },
         },
+      },
+      response: {
+        200: sessionDetailSchema,
       },
     },
   }, async (request, reply) => {
