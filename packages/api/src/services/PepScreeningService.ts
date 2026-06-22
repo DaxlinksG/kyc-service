@@ -89,7 +89,7 @@ export class PepScreeningService {
     // FTS5 rank: more negative = better match
     const ftsQuery = terms.map(t => `"${t}"`).join(' ');
 
-    const rows = db.prepare(`
+    const rows = (db.prepare(`
       SELECT entry_id, full_name, list_source, is_sanctions, rank
       FROM pep_entries
       WHERE pep_entries MATCH ?
@@ -97,8 +97,8 @@ export class PepScreeningService {
       ORDER BY rank
       LIMIT 10
     `).all(ftsQuery, MATCH_RANK_THRESHOLD) as Array<{
-      entry_id: string; full_name: string; list_source: string; is_sanctions: number; rank: number;
-    }>;
+      entry_id: string; full_name: string; list_source: string; is_sanctions: string; rank: number;
+    }>).map(r => ({ ...r, is_sanctions: Number(r.is_sanctions) }));
 
     if (rows.length === 0) return null;
 

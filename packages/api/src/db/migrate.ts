@@ -27,8 +27,12 @@ export function runMigrations(): void {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(migrationsDir, file), 'utf-8');
-    db.exec(sql);
-    db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
+    // Wrap both the migration SQL and the _migrations insert in a single transaction
+    // so a crash mid-migration can't leave the DB in a partially-applied state.
+    db.transaction(() => {
+      db.exec(sql);
+      db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
+    })();
     console.log(`Applied migration: ${file}`);
   }
 }
