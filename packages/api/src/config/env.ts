@@ -28,6 +28,9 @@ const envSchema = z.object({
   AWS_LIVENESS_ACCESS_KEY_ID: z.string().min(16),
   AWS_LIVENESS_SECRET_ACCESS_KEY: z.string().min(16),
 
+  // Rekognition Face Collection for cross-session deduplication
+  FACE_COLLECTION_ID: z.string().default('kyc-service-faces'),
+
   RISK_APPROVE_THRESHOLD: z.coerce.number().default(0.8),
   RISK_MANUAL_THRESHOLD: z.coerce.number().default(0.55),
 

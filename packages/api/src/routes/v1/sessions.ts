@@ -49,6 +49,11 @@ const sessionDetailSchema = {
       nullable: true,
       description: 'ID of the kyc_identities record linked to this session, if any.',
     },
+    verification_link_id: {
+      type: 'string',
+      nullable: true,
+      description: 'ID of the verification link that created this session, if opened via a no-code link.',
+    },
     document_check: {
       type: 'object',
       nullable: true,
@@ -250,6 +255,7 @@ function formatSession(sessionId: string) {
     metadata: session.metadata ? JSON.parse(session.metadata) : null,
     identity_reused: !!session.identity_id,
     identity_id: session.identity_id ?? null,
+    verification_link_id: session.verification_link_id ?? null,
   };
 
   if (doc) {

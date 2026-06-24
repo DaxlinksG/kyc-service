@@ -9,6 +9,9 @@ import { join } from 'path';
 import { getDb } from '../db/client.js';
 import type { DbSelfieCheck, DbDocument } from '../db/schema.js';
 import { env } from '../config/env.js';
+import { FaceIndexService } from './FaceIndexService.js';
+
+const faceIndexService = new FaceIndexService();
 
 const rekognition = new RekognitionClient({ region: env.AWS_REGION });
 
@@ -97,6 +100,14 @@ export class LivenessService {
       SET status = 'DONE', face_detected = ?, liveness_score = ?, match_score = ?, updated_at = ?
       WHERE id = ?
     `).run(faceDetected ? 1 : 0, livenessScore, matchScore, now, selfieId);
+
+    // Dedup: search the face collection for a prior match under a different identity
+    if (faceDetected && refImageBytes) {
+      await this.runDedupSearch(selfieId, Buffer.from(refImageBytes));
+    } else if (faceDetected && docRow) {
+      const docBuffer = readFileSync(join(env.STORAGE_PATH, docRow.storage_path));
+      await this.runDedupSearch(selfieId, docBuffer);
+    }
   }
 
   // ── Passive: static upload → DetectFaces quality scores + CompareFaces ─────
@@ -160,5 +171,27 @@ export class LivenessService {
       SET status = 'DONE', face_detected = 1, liveness_score = ?, match_score = ?, updated_at = ?
       WHERE id = ?
     `).run(livenessScore, matchScore, now, selfieId);
+
+    // Dedup: search the face collection for a prior match under a different identity
+    await this.runDedupSearch(selfieId, selfieBuffer);
+  }
+
+  private async runDedupSearch(selfieId: string, imageBuffer: Buffer): Promise<void> {
+    const db = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    const selfie = db.prepare('SELECT session_id FROM selfie_checks WHERE id = ?').get(selfieId) as { session_id: string } | undefined;
+    if (!selfie) return;
+
+    const match = await faceIndexService.searchFace(imageBuffer);
+    if (!match) return;
+
+    // Only flag if the match is from a DIFFERENT session
+    if (match.session_id === selfie.session_id) return;
+
+    db.prepare(`
+      UPDATE selfie_checks
+      SET duplicate_face_id = ?, duplicate_session_id = ?, duplicate_similarity = ?, updated_at = ?
+      WHERE id = ?
+    `).run(match.face_id, match.session_id, match.similarity, now, selfieId);
   }
 }

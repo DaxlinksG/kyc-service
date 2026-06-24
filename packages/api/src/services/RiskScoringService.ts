@@ -53,6 +53,18 @@ export class RiskScoringService {
       // pep_hit alone does not hard-fail — it forces manual_review via decision override below
     }
 
+    // Face deduplication — same face under a different approved identity = fraud
+    if (selfie?.duplicate_session_id) {
+      const matchedSession = db.prepare('SELECT identity_id FROM sessions WHERE id = ?').get(selfie.duplicate_session_id) as { identity_id: string | null } | undefined;
+      const currentSession = db.prepare('SELECT identity_id FROM sessions WHERE id = ?').get(sessionId) as { identity_id: string | null } | undefined;
+      // Only flag if the identities differ (same person re-verifying is expected and fine)
+      const sameIdentity = matchedSession?.identity_id && currentSession?.identity_id
+        && matchedSession.identity_id === currentSession.identity_id;
+      if (!sameIdentity) {
+        hardFails.push('duplicate_face');
+      }
+    }
+
     // Address name match of 0 when an address check was completed means the name on the
     // address doc doesn't match the ID at all — weight the address score by both
     // OCR confidence AND name match so a 0% name match tanks the address contribution.

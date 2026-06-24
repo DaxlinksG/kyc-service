@@ -6,6 +6,7 @@ import { RiskScoringService } from '../services/RiskScoringService.js';
 import { IdentityService } from '../services/IdentityService.js';
 import { PepScreeningService } from '../services/PepScreeningService.js';
 import { PepSyncService } from '../services/PepSyncService.js';
+import { FaceIndexService } from '../services/FaceIndexService.js';
 import { SessionService } from '../services/SessionService.js';
 import { WebhookService } from '../services/WebhookService.js';
 import { enqueueJob } from './queue.js';
@@ -20,6 +21,7 @@ const riskService = new RiskScoringService();
 const identityService = new IdentityService();
 const pepService = new PepScreeningService();
 const pepSyncService = new PepSyncService();
+const faceIndexService = new FaceIndexService();
 const webhookService = new WebhookService();
 
 export function registerAllProcessors(): void {
@@ -62,12 +64,25 @@ export function registerAllProcessors(): void {
     const result = riskService.score(id);
     sessionService.transition(id, result.decision);
 
-    // If approved, record this identity for future cross-merchant reuse
+    // If approved: record identity for reuse + index face for dedup
     if (result.decision === 'approved') {
       const db = getDb();
       const session = db.prepare('SELECT merchant_id FROM sessions WHERE id = ?').get(id) as { merchant_id: string } | undefined;
       if (session) {
         await identityService.recordApprovedIdentity(id, session.merchant_id);
+
+        // Index the selfie face into the Rekognition collection
+        const selfieRow = db.prepare(`
+          SELECT storage_path FROM selfie_checks
+          WHERE session_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1
+        `).get(id) as { storage_path: string } | undefined;
+        if (selfieRow) {
+          const { readFileSync } = await import('fs');
+          const { join } = await import('path');
+          const { env } = await import('../config/env.js');
+          const selfieBuffer = readFileSync(join(env.STORAGE_PATH, selfieRow.storage_path));
+          await faceIndexService.indexFace(id, session.merchant_id, selfieBuffer);
+        }
       }
     }
 

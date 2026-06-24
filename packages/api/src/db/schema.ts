@@ -40,6 +40,7 @@ export interface DbSession {
   metadata: string | null; // JSON
   redirect_url: string | null;
   identity_id: string | null; // set when this session matched a known kyc_identity
+  verification_link_id: string | null; // set when session was created via a verification link
   created_at: number;
   updated_at: number;
   expires_at: number;
@@ -85,10 +86,36 @@ export interface DbSelfieCheck {
   face_detected: number | null; // 0|1
   liveness_score: number | null;
   match_score: number | null;
+  duplicate_face_id: string | null;
+  duplicate_session_id: string | null;
+  duplicate_similarity: number | null;
   status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';
   error: string | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface DbFaceIndex {
+  id: string;
+  face_id: string;
+  session_id: string;
+  merchant_id: string;
+  identity_id: string | null;
+  indexed_at: number;
+}
+
+export interface DbVerificationLink {
+  id: string;
+  merchant_id: string;
+  name: string;
+  slug: string;
+  is_active: number; // 0|1
+  single_use: number; // 0|1
+  sessions_created: number;
+  redirect_url: string | null;
+  metadata: string | null; // JSON
+  created_at: number;
+  expires_at: number | null;
 }
 
 export interface DbAddressCheck {

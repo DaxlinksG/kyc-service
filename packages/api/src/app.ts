@@ -113,6 +113,7 @@ Session tokens are obtained by creating a session from your **server** and passi
         { name: 'Sessions', description: 'Create and manage KYC verification sessions' },
         { name: 'Documents', description: 'Upload identity documents, selfies, and address proof' },
         { name: 'Webhooks', description: 'Register endpoints to receive real-time verification results' },
+        { name: 'Verification Links', description: 'No-code shareable links that auto-create sessions and launch the widget — zero integration required.' },
         { name: 'Admin', description: 'Platform administration — merchants, sessions, jobs. Requires master API key (`kyc_master_...`).' },
         { name: 'Health', description: 'Service health check' },
       ],
