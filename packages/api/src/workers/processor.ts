@@ -71,17 +71,33 @@ export function registerAllProcessors(): void {
       if (session) {
         await identityService.recordApprovedIdentity(id, session.merchant_id);
 
-        // Index the selfie face into the Rekognition collection
+        // Index the face into the Rekognition collection for future dedup.
+        // Active liveness selfies have empty storage_path (frame lives in AWS);
+        // fall back to the ID document front photo which contains the user's face.
+        const { readFileSync: _readFile } = await import('fs');
+        const { join: _join } = await import('path');
+        const { env: _env } = await import('../config/env.js');
+
         const selfieRow = db.prepare(`
           SELECT storage_path FROM selfie_checks
           WHERE session_id = ? AND status = 'DONE' ORDER BY created_at DESC LIMIT 1
         `).get(id) as { storage_path: string } | undefined;
-        if (selfieRow) {
-          const { readFileSync } = await import('fs');
-          const { join } = await import('path');
-          const { env } = await import('../config/env.js');
-          const selfieBuffer = readFileSync(join(env.STORAGE_PATH, selfieRow.storage_path));
-          await faceIndexService.indexFace(id, session.merchant_id, selfieBuffer);
+
+        const faceImagePath = (selfieRow?.storage_path)
+          ? _join(_env.STORAGE_PATH, selfieRow.storage_path)
+          : (() => {
+              const docRow = db.prepare(`
+                SELECT storage_path FROM documents
+                WHERE session_id = ? AND side = 'FRONT' AND status = 'DONE'
+                ORDER BY created_at DESC LIMIT 1
+              `).get(id) as { storage_path: string } | undefined;
+              return docRow ? _join(_env.STORAGE_PATH, docRow.storage_path) : null;
+            })();
+
+        if (faceImagePath) {
+          await faceIndexService.indexFace(id, session.merchant_id, _readFile(faceImagePath));
+        } else {
+          console.warn(`[FaceIndex] No face image available for session ${id} — skipping index`);
         }
       }
     }

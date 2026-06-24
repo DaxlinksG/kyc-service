@@ -39,18 +39,22 @@ export class AddressService {
 
       const parsed = parseAddressDocument(rawText);
 
-      // Check issue date staleness
+      // Check issue date staleness (guard against NaN from malformed date strings)
       if (parsed.issueDate) {
         const issueMs = new Date(parsed.issueDate).getTime();
-        const ageMs = Date.now() - issueMs;
-        const ageDays = ageMs / (1000 * 60 * 60 * 24);
-        parsed.isStale = ageDays > env.ADDRESS_DOC_MAX_AGE_DAYS;
+        if (isNaN(issueMs)) {
+          parsed.isStale = false;
+        } else {
+          const ageDays = (Date.now() - issueMs) / (1000 * 60 * 60 * 24);
+          parsed.isStale = ageDays > env.ADDRESS_DOC_MAX_AGE_DAYS;
+        }
       }
 
-      // Name match against session's document name
       let nameMatch = 0;
       const docParsedRow = db.prepare(`
-        SELECT ocr_parsed FROM documents WHERE session_id = ? AND ocr_parsed IS NOT NULL LIMIT 1
+        SELECT ocr_parsed FROM documents
+        WHERE session_id = ? AND side = 'FRONT' AND ocr_parsed IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1
       `).get(check.session_id) as { ocr_parsed: string } | undefined;
 
       if (docParsedRow && parsed.fullName) {

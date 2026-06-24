@@ -35,11 +35,13 @@ export class RiskScoringService {
     const addressNameMatch = address?.name_match_score ?? 0;
 
     // Hard fail conditions
-    const docParsed = document?.ocr_parsed ? JSON.parse(document.ocr_parsed) : null;
+    let docParsed: Record<string, any> | null = null;
+    try { docParsed = document?.ocr_parsed ? JSON.parse(document.ocr_parsed) : null; } catch { /* corrupted — treat as no data */ }
     if (docParsed?.isExpired) hardFails.push('expired_document');
     if (selfie && !selfie.face_detected) hardFails.push('no_face_in_selfie');
     if (document && documentConfidence < 0.1) hardFails.push('document_unreadable');
-    if (livenessScore > 0 && livenessScore < 0.3) hardFails.push('liveness_check_failed');
+    // livenessScore === 0 with face_detected=true (e.g. DetectFaces returned 0 quality) is also a fail
+    if (livenessScore < 0.3) hardFails.push('liveness_check_failed');
 
     // Passport MUST have MRZ — unless identity is being reused (document already
     // validated in a prior approved session; only liveness is required this time)

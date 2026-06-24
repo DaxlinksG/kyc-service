@@ -48,8 +48,8 @@ export class IdentityService {
     let parsed: Record<string, any>;
     try { parsed = JSON.parse(doc.ocr_parsed); } catch { return null; }
 
-    const { fullName, dateOfBirth, documentNumber, mrzDetected } = parsed;
-    if (!mrzDetected || !fullName || !dateOfBirth || !documentNumber) return null;
+    const { fullName, dateOfBirth, documentNumber } = parsed;
+    if (!fullName || !dateOfBirth || !documentNumber) return null;
 
     const hash = computeIdentityHash(fullName, dateOfBirth, documentNumber);
 
@@ -106,8 +106,8 @@ export class IdentityService {
     let parsed: Record<string, any>;
     try { parsed = JSON.parse(doc.ocr_parsed); } catch { return null; }
 
-    const { fullName, dateOfBirth, documentNumber, mrzDetected } = parsed;
-    if (!mrzDetected || !fullName || !dateOfBirth || !documentNumber) return null;
+    const { fullName, dateOfBirth, documentNumber } = parsed;
+    if (!fullName || !dateOfBirth || !documentNumber) return null;
 
     const hash = computeIdentityHash(fullName, dateOfBirth, documentNumber);
 

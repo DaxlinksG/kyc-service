@@ -36,7 +36,8 @@ export default async function adminRoutes(app: FastifyInstance) {
             approved: { type: 'number', example: 980 },
             rejected: { type: 'number', example: 180 },
             manual_review: { type: 'number', example: 42 },
-            processing: { type: 'number', example: 12 },
+            processing: { type: 'number', example: 12, description: 'Sessions actively being scored' },
+            in_progress: { type: 'number', example: 24, description: 'Sessions awaiting user uploads (document/selfie/address step)' },
             pending_jobs: { type: 'number', example: 3 },
             total_merchants: { type: 'number', example: 8 },
           },
@@ -65,7 +66,8 @@ export default async function adminRoutes(app: FastifyInstance) {
       approved: stateMap['approved'] ?? 0,
       rejected: stateMap['rejected'] ?? 0,
       manual_review: stateMap['manual_review'] ?? 0,
-      processing: (stateMap['processing'] ?? 0) + (stateMap['document_submitted'] ?? 0) + (stateMap['selfie_submitted'] ?? 0) + (stateMap['address_submitted'] ?? 0),
+      processing: stateMap['processing'] ?? 0,
+      in_progress: (stateMap['document_submitted'] ?? 0) + (stateMap['selfie_submitted'] ?? 0) + (stateMap['address_submitted'] ?? 0),
       pending_jobs: pending,
       total_merchants: merchants,
     });
@@ -162,7 +164,7 @@ export default async function adminRoutes(app: FastifyInstance) {
       document_check: doc ? { ...doc, ocr_parsed: doc.ocr_parsed ? JSON.parse(doc.ocr_parsed) : null } : null,
       selfie_check: selfie,
       address_check: address ? { ...address, ocr_parsed: address.ocr_parsed ? JSON.parse(address.ocr_parsed) : null } : null,
-      risk_score: ['approved','rejected','manual_review','processing'].includes(session.state) ? riskService.score(req.params.id) : null,
+      risk_score: ['approved','rejected','manual_review'].includes(session.state) ? riskService.score(req.params.id) : null,
       audit_log: audit,
     });
   });
