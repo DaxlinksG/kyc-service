@@ -31,6 +31,10 @@ const envSchema = z.object({
   // Rekognition Face Collection for cross-session deduplication
   FACE_COLLECTION_ID: z.string().default('kyc-service-faces'),
 
+  // Minimum selfie<->ID face similarity (0–1) below which the session hard-fails.
+  // Sourced from AWS CompareFaces Similarity / 100.
+  FACE_MATCH_THRESHOLD: z.coerce.number().default(0.8),
+
   RISK_APPROVE_THRESHOLD: z.coerce.number().default(0.8),
   RISK_MANUAL_THRESHOLD: z.coerce.number().default(0.55),
 

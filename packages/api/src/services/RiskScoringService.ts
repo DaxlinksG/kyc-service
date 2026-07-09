@@ -43,6 +43,11 @@ export class RiskScoringService {
     // livenessScore === 0 with face_detected=true (e.g. DetectFaces returned 0 quality) is also a fail
     if (livenessScore < 0.3) hardFails.push('liveness_check_failed');
 
+    // Face match: the selfie must match the ID document face. Only gate when a face was
+    // actually detected in the selfie (no_face_in_selfie covers the missing-face case);
+    // a match below the threshold means the selfie is a different person than the ID.
+    if (selfie?.face_detected && matchScore < env.FACE_MATCH_THRESHOLD) hardFails.push('face_mismatch');
+
     // Passport MUST have MRZ — unless identity is being reused (document already
     // validated in a prior approved session; only liveness is required this time)
     if (!identityReused && document?.document_type === 'PASSPORT' && docParsed?.mrzDetected === false) {
