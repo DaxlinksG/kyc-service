@@ -208,6 +208,187 @@ export default async function sessionRoutes(app: FastifyInstance) {
     return reply.send(formatSession(session.id));
   });
 
+  // GET /v1/sessions — paginated list of THIS merchant's sessions
+  app.get('/sessions', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Sessions'],
+      summary: 'List your sessions',
+      description: 'Returns a paginated, filterable list of the KYC sessions belonging to your merchant account, newest first. Scoped automatically to your API key — you only ever see your own sessions.',
+      security: [{ ApiKey: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'number', default: 1, description: 'Page number (1-based).' },
+          limit: { type: 'number', default: 20, description: 'Results per page (max 100).' },
+          state: {
+            type: 'string',
+            enum: ['created', 'document_submitted', 'selfie_submitted', 'address_submitted', 'processing', 'approved', 'rejected', 'manual_review', 'expired'],
+            description: 'Filter by session state.',
+          },
+          search: { type: 'string', description: 'Match against session ID or your external_id.' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', example: 'ses_abc123' },
+                  external_id: { type: 'string', nullable: true },
+                  state: { type: 'string' },
+                  created_at: { type: 'number' },
+                  updated_at: { type: 'number' },
+                  doc_confidence: { type: 'number', nullable: true },
+                  liveness_score: { type: 'number', nullable: true },
+                  match_score: { type: 'number', nullable: true },
+                  name_match_score: { type: 'number', nullable: true },
+                },
+              },
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                page: { type: 'number' },
+                limit: { type: 'number' },
+                total: { type: 'number' },
+                pages: { type: 'number' },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const query = z.object({
+      page: z.coerce.number().min(1).default(1),
+      limit: z.coerce.number().min(1).max(100).default(20),
+      state: z.string().optional(),
+      search: z.string().trim().optional(),
+    }).parse(request.query);
+
+    const db = getDb();
+    const offset = (query.page - 1) * query.limit;
+
+    let where = 'WHERE s.merchant_id = ?';
+    const params: unknown[] = [request.merchantId];
+
+    if (query.state) { where += ' AND s.state = ?'; params.push(query.state); }
+    if (query.search) {
+      where += ' AND (s.id LIKE ? OR s.external_id LIKE ?)';
+      const like = `%${query.search}%`;
+      params.push(like, like);
+    }
+
+    const sessions = db.prepare(`
+      SELECT s.id, s.external_id, s.state, s.created_at, s.updated_at,
+             d.confidence as doc_confidence,
+             sl.liveness_score, sl.match_score,
+             a.name_match_score
+      FROM sessions s
+      LEFT JOIN documents d ON d.session_id = s.id AND d.side = 'FRONT'
+      LEFT JOIN selfie_checks sl ON sl.session_id = s.id
+      LEFT JOIN address_checks a ON a.session_id = s.id
+      ${where}
+      ORDER BY s.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all([...params, query.limit, offset]);
+
+    const total = (db.prepare(`SELECT COUNT(*) as n FROM sessions s ${where}`).get(params) as any).n;
+
+    return reply.send({
+      data: sessions,
+      pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) },
+    });
+  });
+
+  // GET /v1/metrics — overview stats scoped to THIS merchant
+  app.get('/metrics', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Sessions'],
+      summary: 'Your account metrics',
+      description: 'Aggregate KYC statistics for your merchant account: session totals, decision breakdown, and approval rate. Scoped automatically to your API key.',
+      security: [{ ApiKey: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            total_sessions: { type: 'number' },
+            sessions_today: { type: 'number' },
+            approved: { type: 'number' },
+            rejected: { type: 'number' },
+            manual_review: { type: 'number' },
+            processing: { type: 'number', description: 'Sessions actively being scored.' },
+            in_progress: { type: 'number', description: 'Sessions awaiting user uploads.' },
+            approval_rate: { type: 'number', description: 'approved ÷ (approved + rejected + manual_review), 0–1. Null-safe: 0 when no completed sessions.' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const db = getDb();
+    const merchantId = request.merchantId;
+
+    const total = (db.prepare('SELECT COUNT(*) as n FROM sessions WHERE merchant_id = ?').get(merchantId) as any).n;
+    const byState = db.prepare('SELECT state, COUNT(*) as n FROM sessions WHERE merchant_id = ? GROUP BY state').all(merchantId) as { state: string; n: number }[];
+    const today = Math.floor(Date.now() / 1000) - 86400;
+    const todayCount = (db.prepare('SELECT COUNT(*) as n FROM sessions WHERE merchant_id = ? AND created_at > ?').get(merchantId, today) as any).n;
+
+    const stateMap = Object.fromEntries(byState.map((r) => [r.state, r.n]));
+    const approved = stateMap['approved'] ?? 0;
+    const rejected = stateMap['rejected'] ?? 0;
+    const manualReview = stateMap['manual_review'] ?? 0;
+    const completed = approved + rejected + manualReview;
+
+    return reply.send({
+      total_sessions: total,
+      sessions_today: todayCount,
+      approved,
+      rejected,
+      manual_review: manualReview,
+      processing: stateMap['processing'] ?? 0,
+      in_progress: (stateMap['document_submitted'] ?? 0) + (stateMap['selfie_submitted'] ?? 0) + (stateMap['address_submitted'] ?? 0),
+      approval_rate: completed > 0 ? approved / completed : 0,
+    });
+  });
+
+  // GET /v1/me — identify the merchant behind the current API key
+  app.get('/me', {
+    preHandler: [(app as any).verifyMerchantAuth],
+    schema: {
+      tags: ['Sessions'],
+      summary: 'Identify your account',
+      description: 'Returns the merchant account associated with the current API key. Useful for confirming which account a key belongs to.',
+      security: [{ ApiKey: [] }],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            merchant_id: { type: 'string' },
+            name: { type: 'string', nullable: true },
+            pep_screening_enabled: { type: 'boolean' },
+            created_at: { type: 'number', nullable: true },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const db = getDb();
+    const merchant = db.prepare('SELECT id, name, pep_screening_enabled, created_at FROM merchants WHERE id = ?')
+      .get(request.merchantId) as any;
+    return reply.send({
+      merchant_id: request.merchantId,
+      name: merchant?.name ?? null,
+      pep_screening_enabled: !!merchant?.pep_screening_enabled,
+      created_at: merchant?.created_at ?? null,
+    });
+  });
+
   // GET /v1/sessions/:id/status — accepts both merchant API key and session token
   app.get<{ Params: { id: string } }>('/sessions/:id/status', {
     preHandler: [(app as any).verifyAnyAuth],

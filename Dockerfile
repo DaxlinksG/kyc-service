@@ -4,15 +4,19 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY packages/admin/package.json ./packages/admin/
+COPY packages/portal/package.json ./packages/portal/
 COPY packages/widget/package.json ./packages/widget/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/api/package.json ./packages/api/
 RUN npm install --workspaces
 COPY packages/admin ./packages/admin
+COPY packages/portal ./packages/portal
 COPY packages/widget ./packages/widget
 COPY packages/sdk ./packages/sdk
 COPY tsconfig.base.json ./
 RUN npm run build --workspace=packages/admin
+# Portal build must run AFTER admin (admin's emptyOutDir wipes public/; portal writes into public/portal)
+RUN npm run build --workspace=packages/portal
 RUN npm run build --workspace=packages/widget
 # Copy widget JS into API's public/widget folder (served at /widget/kyc-widget.js)
 # Also self-host the zxing PDF417 reader WASM (loaded at runtime by the widget for

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace=packages/admin"],
       "port": 5174
+    },
+    {
+      "name": "merchant-portal",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=packages/portal"],
+      "port": 5175
     }
   ]
 }

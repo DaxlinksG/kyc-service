@@ -158,6 +158,17 @@ Session tokens are obtained by creating a session from your **server** and passi
       });
     }
 
+    // Merchant self-serve portal
+    const portalDir = join(publicDir, 'portal');
+    if (existsSync(portalDir)) {
+      app.get('/portal', (_req, reply) => reply.redirect('/portal/'));
+      await app.register(staticFiles, {
+        root: portalDir,
+        prefix: '/portal/',
+        decorateReply: false,
+      });
+    }
+
   }
 
   // Routes
