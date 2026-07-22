@@ -45,7 +45,11 @@ export function renderLogin() {
       api.setBase(base === location.origin ? '' : base);
       await api.get('/v1/admin/metrics');
       localStorage.setItem('kyc_admin_key', key);
+      // Keep the stored base in sync with this login. Without the else-branch, a prior
+      // remote base would linger in localStorage and get restored on the next reload,
+      // silently pointing an origin-local admin at the wrong server.
       if (base !== location.origin) localStorage.setItem('kyc_admin_base', base);
+      else localStorage.removeItem('kyc_admin_base');
       renderDashboard();
     } catch {
       errorDiv.innerHTML = `<div class="alert alert-error">Invalid API key or unable to reach the server.</div>`;

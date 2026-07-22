@@ -1,4 +1,5 @@
 import { api } from '../api/client.js';
+import { esc } from '../util.js';
 
 export async function renderSessionDetail(sessionId: string) {
   // Overlay modal
@@ -24,28 +25,36 @@ export async function renderSessionDetail(sessionId: string) {
     const s = await api.get(`/v1/admin/sessions/${sessionId}`);
     const canOverride = ['manual_review', 'processing'].includes(s.state);
 
+    // The admin detail endpoint spreads the raw DB rows, so the parsed OCR/barcode
+    // object lives under `ocr_parsed` (not `parsed`). Read the correct key.
+    const dp = s.document_check?.ocr_parsed ?? {};
+    const ap = s.address_check?.ocr_parsed ?? {};
+
     body.innerHTML = `
       <div class="detail-grid" style="margin-bottom:20px">
-        ${detail('Session ID', `<code style="font-size:12px">${s.id}</code>`)}
-        ${detail('Merchant', s.merchant_id)}
-        ${detail('State', `<span class="badge badge-${s.state}">${s.state.replace('_',' ')}</span>`)}
+        ${detail('Session ID', `<code style="font-size:12px">${esc(s.id)}</code>`)}
+        ${detail('Merchant', esc(s.merchant_id))}
+        ${detail('State', `<span class="badge badge-${esc(s.state)}">${esc(String(s.state).replace('_',' '))}</span>`)}
         ${detail('Created', new Date(s.created_at * 1000).toLocaleString())}
         ${detail('Expires', new Date(s.expires_at * 1000).toLocaleString())}
-        ${s.metadata ? detail('Metadata', `<pre style="font-size:11px;white-space:pre-wrap">${JSON.stringify(s.metadata, null, 2)}</pre>`) : ''}
+        ${s.metadata ? detail('Metadata', `<pre style="font-size:11px;white-space:pre-wrap">${esc(JSON.stringify(s.metadata, null, 2))}</pre>`) : ''}
       </div>
 
       ${s.risk_score ? riskScoreHTML(s.risk_score) : ''}
 
       ${s.document_check ? checkSection('📄 Document Check', [
         detail('Status', statusBadge(s.document_check.status)),
-        detail('Type', s.document_check.document_type),
+        detail('Type', esc(s.document_check.document_type)),
+        s.document_check.side ? detail('Side', esc(s.document_check.side)) : '',
+        detail('Verification Method', verificationMethod(dp)),
         detail('Confidence', pct(s.document_check.confidence)),
-        s.document_check.parsed?.fullName ? detail('Name', s.document_check.parsed.fullName) : '',
-        s.document_check.parsed?.dateOfBirth ? detail('Date of Birth', s.document_check.parsed.dateOfBirth) : '',
-        s.document_check.parsed?.documentNumber ? detail('Doc Number', s.document_check.parsed.documentNumber) : '',
-        s.document_check.parsed?.expiryDate ? detail('Expiry', s.document_check.parsed.expiryDate + (s.document_check.parsed.isExpired ? ' ⚠️ EXPIRED' : '')) : '',
-        s.document_check.parsed?.nationality ? detail('Nationality', s.document_check.parsed.nationality) : '',
-        detail('MRZ Detected', s.document_check.parsed?.mrzDetected ? '✅ Yes' : '❌ No'),
+        dp.fullName ? detail('Name', esc(dp.fullName)) : '',
+        dp.dateOfBirth ? detail('Date of Birth', esc(dp.dateOfBirth)) : '',
+        dp.documentNumber ? detail('Doc Number', esc(dp.documentNumber)) : '',
+        dp.expiryDate ? detail('Expiry', esc(dp.expiryDate) + (dp.isExpired ? ' ⚠️ EXPIRED' : '')) : '',
+        dp.issuingCountry ? detail('Issuing Country', esc(dp.issuingCountry)) : '',
+        dp.province ? detail('Province / State', esc(dp.province)) : '',
+        dp.nationality ? detail('Nationality', esc(dp.nationality)) : '',
       ]) : ''}
 
       ${s.selfie_check ? checkSection('🤳 Liveness Check', [
@@ -57,12 +66,12 @@ export async function renderSessionDetail(sessionId: string) {
 
       ${s.address_check ? checkSection('🏠 Address Check', [
         detail('Status', statusBadge(s.address_check.status)),
-        detail('Document Type', s.address_check.document_type),
+        detail('Document Type', esc(s.address_check.document_type)),
         detail('Confidence', pct(s.address_check.confidence)),
         detail('Name Match', scoreBar(s.address_check.name_match_score)),
-        s.address_check.parsed?.fullName ? detail('Name on Doc', s.address_check.parsed.fullName) : '',
-        s.address_check.parsed?.addressLine1 ? detail('Address', [s.address_check.parsed.addressLine1, s.address_check.parsed.addressLine2, s.address_check.parsed.city, s.address_check.parsed.postcode].filter(Boolean).join(', ')) : '',
-        s.address_check.parsed?.issueDate ? detail('Issue Date', s.address_check.parsed.issueDate + (s.address_check.parsed.isStale ? ' ⚠️ STALE' : '')) : '',
+        ap.fullName ? detail('Name on Doc', esc(ap.fullName)) : '',
+        ap.addressLine1 ? detail('Address', esc([ap.addressLine1, ap.addressLine2, ap.city, ap.postcode].filter(Boolean).join(', '))) : '',
+        ap.issueDate ? detail('Issue Date', esc(ap.issueDate) + (ap.isStale ? ' ⚠️ STALE' : '')) : '',
       ]) : ''}
 
       ${canOverride ? `
@@ -80,7 +89,7 @@ export async function renderSessionDetail(sessionId: string) {
         await api.post(`/v1/admin/sessions/${sessionId}/approve`);
         document.getElementById('override-msg')!.innerHTML = `<div class="alert alert-success" style="margin-top:12px">Session approved successfully.</div>`;
       } catch (e: any) {
-        document.getElementById('override-msg')!.innerHTML = `<div class="alert alert-error" style="margin-top:12px">${e?.error?.message}</div>`;
+        document.getElementById('override-msg')!.innerHTML = `<div class="alert alert-error" style="margin-top:12px">${esc(e?.error?.message ?? 'Request failed')}</div>`;
       }
     });
 
@@ -90,7 +99,7 @@ export async function renderSessionDetail(sessionId: string) {
         await api.post(`/v1/admin/sessions/${sessionId}/reject`);
         document.getElementById('override-msg')!.innerHTML = `<div class="alert alert-error" style="margin-top:12px">Session rejected.</div>`;
       } catch (e: any) {
-        document.getElementById('override-msg')!.innerHTML = `<div class="alert alert-error" style="margin-top:12px">${e?.error?.message}</div>`;
+        document.getElementById('override-msg')!.innerHTML = `<div class="alert alert-error" style="margin-top:12px">${esc(e?.error?.message ?? 'Request failed')}</div>`;
       }
     });
 
@@ -139,6 +148,18 @@ function scoreBar(v: number | null) {
   const p = Math.round(v * 100);
   const color = p >= 70 ? 'var(--success)' : p >= 40 ? 'var(--warning)' : 'var(--danger)';
   return `<span>${p}%</span><div class="score-bar" style="margin-top:4px"><div class="score-fill" style="width:${p}%;background:${color}"></div></div>`;
+}
+
+/**
+ * How the document's identity data was obtained, in trust order:
+ * a server-verified AAMVA barcode is the strongest (green badge), then MRZ, then
+ * plain OCR. This replaces the old "MRZ Detected: No" line, which was misleading for
+ * barcode-verified North American cards (they legitimately have no MRZ).
+ */
+function verificationMethod(parsed: any): string {
+  if (parsed?.barcodeVerified) return '<span class="badge badge-approved">🔒 Barcode (verified)</span>';
+  if (parsed?.mrzDetected) return '<span class="badge badge-processing">✅ MRZ</span>';
+  return '<span class="badge badge-created">OCR</span>';
 }
 
 function statusBadge(s: string) {

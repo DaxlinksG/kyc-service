@@ -2,6 +2,7 @@ import { api } from '../api/client.js';
 import { renderSessionsPage } from '../components/SessionsTable.js';
 import { renderMerchantsPage } from '../components/MerchantsTable.js';
 import { renderSessionDetail } from '../components/SessionDetail.js';
+import { esc } from '../util.js';
 
 type Page = 'overview' | 'sessions' | 'merchants' | 'jobs';
 let currentPage: Page = 'overview';
@@ -64,7 +65,7 @@ async function loadPage(page: Page) {
     else if (page === 'merchants') await renderMerchantsPage(content);
     else if (page === 'jobs') await renderJobsPage(content);
   } catch (err: any) {
-    content.innerHTML = `<div class="alert alert-error">${err?.error?.message ?? 'Failed to load page'}</div>`;
+    content.innerHTML = `<div class="alert alert-error">${esc(err?.error?.message ?? 'Failed to load page')}</div>`;
   }
 }
 
@@ -128,13 +129,13 @@ export function sessionsTableHTML(sessions: any[], showPagination = true) {
       <tbody>
         ${sessions.map((s: any) => `
           <tr>
-            <td><code style="font-size:11px">${s.id}</code></td>
-            <td>${s.merchant_id}</td>
-            <td><span class="badge badge-${s.state}">${s.state.replace('_', ' ')}</span></td>
+            <td><code style="font-size:11px">${esc(s.id)}</code></td>
+            <td>${esc(s.merchant_id)}</td>
+            <td><span class="badge badge-${esc(s.state)}">${esc(String(s.state).replace('_', ' '))}</span></td>
             <td>${s.doc_confidence != null ? `${Math.round(s.doc_confidence * 100)}%` : '—'}</td>
             <td>${s.match_score != null ? `${Math.round(s.match_score * 100)}%` : '—'}</td>
             <td>${timeAgo(s.created_at)}</td>
-            <td><button class="btn btn-outline btn-sm view-session-btn" data-id="${s.id}">View</button></td>
+            <td><button class="btn btn-outline btn-sm view-session-btn" data-id="${esc(s.id)}">View</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -174,11 +175,11 @@ async function renderJobsPage(container: HTMLElement) {
         <tbody>
           ${(data.recent as any[]).map((j: any) => `
             <tr>
-              <td><code style="font-size:11px">${j.id}</code></td>
-              <td>${j.job_type}</td>
-              <td><span class="badge badge-${j.status.toLowerCase()}">${j.status}</span></td>
-              <td>${j.attempts}/${j.max_attempts}</td>
-              <td style="color:var(--danger);font-size:12px">${j.error ?? '—'}</td>
+              <td><code style="font-size:11px">${esc(j.id)}</code></td>
+              <td>${esc(j.job_type)}</td>
+              <td><span class="badge badge-${esc(String(j.status).toLowerCase())}">${esc(j.status)}</span></td>
+              <td>${esc(j.attempts)}/${esc(j.max_attempts)}</td>
+              <td style="color:var(--danger);font-size:12px">${j.error ? esc(j.error) : '—'}</td>
               <td>${timeAgo(j.created_at)}</td>
             </tr>
           `).join('')}

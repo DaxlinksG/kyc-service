@@ -1,4 +1,5 @@
 import { api } from '../api/client.js';
+import { esc } from '../util.js';
 
 export async function renderMerchantsPage(container: HTMLElement) {
   container.innerHTML = `
@@ -31,13 +32,13 @@ async function loadMerchants() {
       <tbody>
         ${data.map((m: any) => `
           <tr>
-            <td><code style="font-size:12px">${m.id}</code></td>
-            <td>${m.name}</td>
-            <td>${m.active_keys}</td>
-            <td>${m.total_sessions}</td>
+            <td><code style="font-size:12px">${esc(m.id)}</code></td>
+            <td>${esc(m.name)}</td>
+            <td>${esc(m.active_keys)}</td>
+            <td>${esc(m.total_sessions)}</td>
             <td>${new Date(m.created_at * 1000).toLocaleDateString()}</td>
             <td>
-              <button class="btn btn-outline btn-sm create-key-btn" data-merchant="${m.id}">+ API Key</button>
+              <button class="btn btn-outline btn-sm create-key-btn" data-merchant="${esc(m.id)}">+ API Key</button>
             </td>
           </tr>
         `).join('')}
@@ -77,7 +78,7 @@ function showAddMerchantModal() {
       await api.post('/v1/admin/merchants', { id, name });
       document.getElementById('m-success')!.innerHTML = `<div class="alert alert-success">Merchant created!</div>`;
     } catch (e: any) {
-      document.getElementById('m-error')!.innerHTML = `<div class="alert alert-error">${e?.error?.message}</div>`;
+      document.getElementById('m-error')!.innerHTML = `<div class="alert alert-error">${esc(e?.error?.message ?? 'Request failed')}</div>`;
     }
   });
 }
@@ -91,7 +92,7 @@ function showCreateKeyModal(merchantId: string) {
         <h2>Create API Key</h2>
         <button class="close-btn" id="close-k">✕</button>
       </div>
-      <p style="color:var(--muted);margin-bottom:16px">Creating key for merchant: <strong>${merchantId}</strong></p>
+      <p style="color:var(--muted);margin-bottom:16px">Creating key for merchant: <strong>${esc(merchantId)}</strong></p>
       <div class="form-group"><label>Key Name (optional)</label><input id="k-name" placeholder="Production key" /></div>
       <div id="k-error"></div>
       <div id="k-result"></div>
@@ -110,13 +111,13 @@ function showCreateKeyModal(merchantId: string) {
           <strong>✅ API Key created — save it now, it won't be shown again!</strong>
         </div>
         <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;word-break:break-all;font-family:monospace;font-size:13px;user-select:all">
-          ${result.api_key}
+          ${esc(result.api_key)}
         </div>
         <p style="font-size:12px;color:var(--muted);margin-top:8px">Click the key above to select all, then copy it.</p>
       `;
       document.getElementById('k-submit')!.style.display = 'none';
     } catch (e: any) {
-      document.getElementById('k-error')!.innerHTML = `<div class="alert alert-error">${e?.error?.message}</div>`;
+      document.getElementById('k-error')!.innerHTML = `<div class="alert alert-error">${esc(e?.error?.message ?? 'Request failed')}</div>`;
     }
   });
 }
