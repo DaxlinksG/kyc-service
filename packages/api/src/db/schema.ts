@@ -71,6 +71,7 @@ export interface DbDocument {
   storage_path: string;
   ocr_raw: string | null; // JSON
   ocr_parsed: string | null; // JSON
+  barcode_raw: string | null; // raw decoded AAMVA PDF417 string (back of DL/ID)
   face_descriptor: string | null; // JSON float[]
   confidence: number | null;
   status: 'PENDING' | 'PROCESSING' | 'DONE' | 'FAILED';

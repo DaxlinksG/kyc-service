@@ -7,9 +7,14 @@ export interface ParsedDocument {
   dateOfBirth?: string; // YYYY-MM-DD
   documentNumber?: string;
   expiryDate?: string; // YYYY-MM-DD
+  issueDate?: string; // YYYY-MM-DD
   nationality?: string;
   isExpired?: boolean;
   mrzDetected?: boolean;
+  // AAMVA PDF417 barcode (North American driver's licenses / provincial ID cards)
+  barcodeVerified?: boolean; // parsed from a machine-readable, structured barcode
+  province?: string; // jurisdiction code, e.g. 'ON', 'BC', 'QC'
+  issuingCountry?: string; // 'CAN' | 'USA'
 }
 
 export interface ParsedAddress {
@@ -17,6 +22,7 @@ export interface ParsedAddress {
   addressLine1?: string;
   addressLine2?: string;
   city?: string;
+  province?: string; // state / province, e.g. 'ON', 'BC'
   postcode?: string;
   country?: string;
   issueDate?: string; // YYYY-MM-DD

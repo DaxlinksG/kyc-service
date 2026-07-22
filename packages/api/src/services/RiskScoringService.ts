@@ -1,6 +1,7 @@
 import { getDb } from '../db/client.js';
-import type { DbDocument, DbSelfieCheck, DbAddressCheck, DbSession, DbPepCheck } from '../db/schema.js';
+import type { DbSelfieCheck, DbAddressCheck, DbSession, DbPepCheck } from '../db/schema.js';
 import type { RiskScore } from '../types/domain.js';
+import { selectBestIdentityDoc } from '../lib/identityDoc.js';
 import { env } from '../config/env.js';
 
 export class RiskScoringService {
@@ -10,9 +11,11 @@ export class RiskScoringService {
     const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as DbSession | undefined;
     const identityReused = !!session?.identity_id;
 
-    const document = db
-      .prepare("SELECT * FROM documents WHERE session_id = ? AND side = 'FRONT' ORDER BY created_at DESC LIMIT 1")
-      .get(sessionId) as DbDocument | undefined;
+    // Best identity-bearing document across both sides (barcode-verified > MRZ > OCR).
+    // For North American DL/ID cards the authoritative data is the AAMVA barcode on
+    // the BACK, so we must not restrict to side='FRONT'.
+    const bestDoc = selectBestIdentityDoc(db, sessionId);
+    const document = bestDoc?.doc;
 
     const selfie = db
       .prepare('SELECT * FROM selfie_checks WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
@@ -35,8 +38,7 @@ export class RiskScoringService {
     const addressNameMatch = address?.name_match_score ?? 0;
 
     // Hard fail conditions
-    let docParsed: Record<string, any> | null = null;
-    try { docParsed = document?.ocr_parsed ? JSON.parse(document.ocr_parsed) : null; } catch { /* corrupted — treat as no data */ }
+    const docParsed = bestDoc?.parsed ?? null;
     if (docParsed?.isExpired) hardFails.push('expired_document');
     if (selfie && !selfie.face_detected) hardFails.push('no_face_in_selfie');
     if (document && documentConfidence < 0.1) hardFails.push('document_unreadable');

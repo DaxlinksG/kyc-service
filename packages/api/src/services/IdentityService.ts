@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
 import { nanoid } from 'nanoid';
 import { getDb } from '../db/client.js';
-import type { DbKycIdentity, DbDocument } from '../db/schema.js';
+import type { DbKycIdentity } from '../db/schema.js';
+import { selectBestIdentityDoc } from '../lib/identityDoc.js';
 
 const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
 
@@ -36,19 +37,11 @@ export class IdentityService {
     const db = getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // Get the best document with MRZ data
-    const doc = db.prepare(`
-      SELECT * FROM documents
-      WHERE session_id = ? AND side = 'FRONT' AND status = 'DONE'
-      ORDER BY created_at DESC LIMIT 1
-    `).get(sessionId) as DbDocument | undefined;
+    // Best identity-bearing document across both sides (barcode-verified > MRZ > OCR).
+    const best = selectBestIdentityDoc(db, sessionId);
+    if (!best) return null;
 
-    if (!doc?.ocr_parsed) return null;
-
-    let parsed: Record<string, any>;
-    try { parsed = JSON.parse(doc.ocr_parsed); } catch { return null; }
-
-    const { fullName, dateOfBirth, documentNumber } = parsed;
+    const { fullName, dateOfBirth, documentNumber } = best.parsed;
     if (!fullName || !dateOfBirth || !documentNumber) return null;
 
     const hash = computeIdentityHash(fullName, dateOfBirth, documentNumber);
@@ -95,18 +88,10 @@ export class IdentityService {
     const db = getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    const doc = db.prepare(`
-      SELECT * FROM documents
-      WHERE session_id = ? AND side = 'FRONT' AND status = 'DONE'
-      ORDER BY created_at DESC LIMIT 1
-    `).get(sessionId) as DbDocument | undefined;
+    const best = selectBestIdentityDoc(db, sessionId);
+    if (!best) return null;
 
-    if (!doc?.ocr_parsed) return null;
-
-    let parsed: Record<string, any>;
-    try { parsed = JSON.parse(doc.ocr_parsed); } catch { return null; }
-
-    const { fullName, dateOfBirth, documentNumber } = parsed;
+    const { fullName, dateOfBirth, documentNumber } = best.parsed;
     if (!fullName || !dateOfBirth || !documentNumber) return null;
 
     const hash = computeIdentityHash(fullName, dateOfBirth, documentNumber);

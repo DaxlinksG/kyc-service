@@ -64,7 +64,7 @@ export function App({ sessionToken, apiBaseUrl, onComplete, onError }: AppProps)
 
       <div className="kyc-body">
         {step === 'welcome' && <WelcomeStep onNext={advance} />}
-        {step === 'document' && <DocumentStep client={client} onNext={advance} onError={onError} />}
+        {step === 'document' && <DocumentStep client={client} apiBaseUrl={apiBaseUrl} onNext={advance} onError={onError} />}
         {step === 'selfie' && <SelfieStep client={client} onNext={advance} onError={onError} />}
         {step === 'address' && <AddressStep client={client} onNext={advance} onError={onError} />}
         {step === 'processing' && <ProcessingStep client={client} onResult={showResult} />}

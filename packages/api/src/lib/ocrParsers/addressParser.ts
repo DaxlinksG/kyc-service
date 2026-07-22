@@ -8,7 +8,7 @@ export function parseAddressDocument(text: string): ParsedAddress {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   const fullText = lines.join('\n');
 
-  return {
+  const result: ParsedAddress = {
     fullName: extractName(lines),
     addressLine1: extractAddressLine1(lines),
     addressLine2: extractAddressLine2(lines),
@@ -16,6 +16,29 @@ export function parseAddressDocument(text: string): ParsedAddress {
     postcode: extractPostcode(fullText),
     issueDate: extractIssueDate(fullText),
   };
+  const province = extractProvince(fullText);
+  if (province) result.province = province;
+  return result;
+}
+
+// Canadian provinces/territories: code → matching full name (for text scans).
+const CA_PROVINCES: Record<string, string> = {
+  AB: 'Alberta', BC: 'British Columbia', MB: 'Manitoba', NB: 'New Brunswick',
+  NL: 'Newfoundland and Labrador', NS: 'Nova Scotia', NT: 'Northwest Territories',
+  NU: 'Nunavut', ON: 'Ontario', PE: 'Prince Edward Island', QC: 'Quebec',
+  SK: 'Saskatchewan', YT: 'Yukon',
+};
+
+/** Extract a Canadian province/territory code from a document's text. */
+function extractProvince(text: string): string | undefined {
+  // Full province name (most reliable on a utility bill / bank statement)
+  for (const [code, name] of Object.entries(CA_PROVINCES)) {
+    if (new RegExp(`\\b${name}\\b`, 'i').test(text)) return code;
+  }
+  // 2-letter code immediately before a Canadian postal code, e.g. "ON  M5V 2T6"
+  const beforePostal = text.match(/\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b[\s,]+[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d\b/i);
+  if (beforePostal?.[1]) return beforePostal[1].toUpperCase();
+  return undefined;
 }
 
 function extractName(lines: string[]): string | undefined {
@@ -118,6 +141,11 @@ function extractCity(lines: string[], fullText: string): string | undefined {
 }
 
 function extractPostcode(text: string): string | undefined {
+  // Canadian postal code: A1A 1A1 (letter-digit-letter digit-letter-digit).
+  // Checked first — its strict alternating pattern won't false-match other formats.
+  const ca = text.match(/\b([A-Za-z]\d[A-Za-z])\s?(\d[A-Za-z]\d)\b/);
+  if (ca) return `${ca[1]!.toUpperCase()} ${ca[2]!.toUpperCase()}`;
+
   // Nigerian postal code (6 digits)
   const ng = text.match(/\b(\d{6})\b/);
   if (ng) return ng[1];

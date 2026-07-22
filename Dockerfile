@@ -15,8 +15,11 @@ COPY tsconfig.base.json ./
 RUN npm run build --workspace=packages/admin
 RUN npm run build --workspace=packages/widget
 # Copy widget JS into API's public/widget folder (served at /widget/kyc-widget.js)
+# Also self-host the zxing PDF417 reader WASM (loaded at runtime by the widget for
+# AAMVA barcode scanning) so there is no third-party CDN dependency.
 RUN mkdir -p packages/api/public/widget && \
-    cp packages/widget/dist/kyc-widget.iife.js packages/api/public/widget/kyc-widget.js
+    cp packages/widget/dist/kyc-widget.iife.js packages/api/public/widget/kyc-widget.js && \
+    cp node_modules/zxing-wasm/dist/reader/zxing_reader.wasm packages/api/public/widget/zxing_reader.wasm
 
 # ---- Production API ----
 FROM node:20-alpine AS production

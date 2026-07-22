@@ -129,12 +129,17 @@ function checkAndScoreIfReady(sessionId: string): void {
   `).get(sessionId) as (DbSession & { pep_screening_enabled: number }) | undefined;
   if (!session) return;
 
-  // Score once all checks are terminal (DONE or FAILED)
-  const docTerminal = db.prepare("SELECT 1 FROM documents WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
+  // Score once all checks are terminal (DONE or FAILED). For documents we must wait
+  // for EVERY uploaded document to reach a terminal state — not just one — so that a
+  // late-arriving BACK-of-card side (whose AAMVA barcode is the authoritative identity)
+  // is fully processed before scoring runs. Scoring off a half-processed document set
+  // would ignore the barcode entirely.
+  const docExists = db.prepare("SELECT 1 FROM documents WHERE session_id = ?").get(sessionId);
+  const docPending = db.prepare("SELECT 1 FROM documents WHERE session_id = ? AND status NOT IN ('DONE','FAILED')").get(sessionId);
   const selfieTerminal = db.prepare("SELECT 1 FROM selfie_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
   const addressTerminal = db.prepare("SELECT 1 FROM address_checks WHERE session_id = ? AND status IN ('DONE','FAILED')").get(sessionId);
 
-  if (!docTerminal || !selfieTerminal || !addressTerminal) return;
+  if (!docExists || docPending || !selfieTerminal || !addressTerminal) return;
 
   // If PEP screening is enabled, also wait for the pep_check to complete
   if (session.pep_screening_enabled) {

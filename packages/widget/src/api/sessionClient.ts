@@ -24,18 +24,24 @@ export class SessionClient {
   private get sessionId(): string {
     // Decode session ID from JWT sub claim (no signature verification — server validates)
     try {
-      const payload = JSON.parse(atob(this.sessionToken.split('.')[1]!));
+      // JWT payloads are base64url-encoded; atob only accepts standard base64, so
+      // translate the URL-safe alphabet (-/_) and restore padding before decoding.
+      const b64url = this.sessionToken.split('.')[1]!;
+      const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(b64url.length / 4) * 4, '=');
+      const payload = JSON.parse(atob(b64));
       return payload.sub as string;
     } catch {
       throw new Error('Invalid session token');
     }
   }
 
-  async uploadDocument(file: File, documentType: string, side: string): Promise<void> {
+  async uploadDocument(file: File, documentType: string, side: string, barcodeRaw?: string): Promise<void> {
     const form = new FormData();
     form.append('file', file);
     form.append('document_type', documentType);
     form.append('side', side);
+    // AAMVA PDF417 barcode decoded client-side from a North American DL/ID back.
+    if (barcodeRaw) form.append('barcode_raw', barcodeRaw);
     await this.request(`/v1/sessions/${this.sessionId}/documents`, { method: 'POST', body: form });
   }
 
