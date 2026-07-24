@@ -135,8 +135,9 @@ Session tokens are obtained by creating a session from your **server** and passi
   // Serve admin dashboard and widget (built static files)
   const publicDir = join(__dirname, '../public');
   if (existsSync(publicDir)) {
-    // Admin dashboard
-    app.get('/admin', (_req, reply) => reply.redirect('/admin/'));
+    // Admin dashboard. `hide: true` keeps this HTML redirect out of the OpenAPI
+    // spec — it is not an API endpoint and would otherwise clutter /docs.
+    app.get('/admin', { schema: { hide: true } }, (_req, reply) => reply.redirect('/admin/'));
     await app.register(staticFiles, {
       root: publicDir,
       prefix: '/admin/',
@@ -161,7 +162,7 @@ Session tokens are obtained by creating a session from your **server** and passi
     // Merchant self-serve portal
     const portalDir = join(publicDir, 'portal');
     if (existsSync(portalDir)) {
-      app.get('/portal', (_req, reply) => reply.redirect('/portal/'));
+      app.get('/portal', { schema: { hide: true } }, (_req, reply) => reply.redirect('/portal/'));
       await app.register(staticFiles, {
         root: portalDir,
         prefix: '/portal/',
