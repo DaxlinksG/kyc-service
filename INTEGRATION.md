@@ -371,6 +371,11 @@ Authorization: Bearer kyc_live_your_api_key
 
 ## SDK (TypeScript / Node.js)
 
+The official SDK wraps the full API surface with typed methods, automatic
+retries, and constant-time webhook verification. Published on npm as
+[`@zeehfi/kyc-sdk`](https://www.npmjs.com/package/@zeehfi/kyc-sdk); requires
+Node.js 18+ and ships both ESM and CommonJS builds with type declarations.
+
 ```bash
 npm install @zeehfi/kyc-sdk
 ```
@@ -379,22 +384,57 @@ npm install @zeehfi/kyc-sdk
 import { KycClient } from '@zeehfi/kyc-sdk';
 
 const kyc = new KycClient({
-  apiKey: process.env.KYC_API_KEY!,
-  baseUrl: 'https://kyc.zeehfi.ca',
+  apiKey: process.env.KYC_API_KEY!, // kyc_live_...
+  // baseUrl defaults to https://kyc.zeehfi.ca
 });
 
-// Create a session
-const session = await kyc.sessions.create({ externalId: 'user_123' });
+// Create a session on your server
+const session = await kyc.sessions.create({
+  metadata: { externalId: 'user_123' },
+});
 
-// Pass session.sessionToken to your frontend
+// Hand session.session_token to your frontend (widget or custom UI)
 
-// Poll for the decision (backoff, up to 2 minutes)
-const result = await kyc.sessions.waitForDecision(session.sessionId);
-console.log(result.status); // "approved"
-
-// Verify a webhook signature
-const event = kyc.webhooks.verify(rawBody, signatureHeader, signingSecret);
+// Poll for the decision (exponential backoff, up to 2 minutes)
+const result = await kyc.sessions.waitForDecision(session.session_id);
+console.log(result.state); // "approved" | "rejected" | "manual_review"
 ```
+
+### What the client exposes
+
+```typescript
+kyc.sessions           // create, get, getStatus, list, waitForDecision, upload*
+kyc.verificationLinks  // create, list, get, update, deactivate
+kyc.webhooks           // create, list, test, delete
+kyc.account            // me(), metrics()
+kyc.verifyWebhook(rawBody, signature, signingSecret) // -> parsed event, or throws
+```
+
+### Verifying a webhook
+
+`verifyWebhook` performs HMAC-SHA256 verification with a constant-time
+comparison and a 5-minute replay window, then returns the parsed event. Always
+verify before trusting the payload.
+
+```typescript
+app.post('/webhooks/kyc', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    const event = kyc.verifyWebhook(
+      req.body,                            // raw Buffer
+      req.headers['x-kyc-signature'] as string,
+      process.env.KYC_WEBHOOK_SECRET!,     // signing_secret from registration
+    );
+    // event.event === 'session.approved' | 'session.rejected' | 'session.manual_review'
+    res.status(200).send('ok');
+  } catch {
+    res.status(400).send('Invalid signature');
+  }
+});
+```
+
+A standalone `verifyWebhookSignature(rawBody, signature, secret)` export is also
+available if you prefer not to instantiate the client. Full reference and more
+examples live on the [npm README](https://www.npmjs.com/package/@zeehfi/kyc-sdk).
 
 ---
 

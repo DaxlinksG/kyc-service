@@ -1,6 +1,6 @@
 {
   "name": "@zeehfi/kyc-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Official TypeScript/Node.js SDK for the Zeeh KYC verification service — sessions, document uploads, webhooks, and signature verification.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,7 +15,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",
