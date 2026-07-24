@@ -55,6 +55,7 @@ new KycClient({
 await kyc.sessions.create({ metadata, redirect_url });
 await kyc.sessions.get(sessionId);        // full result with per-check breakdown
 await kyc.sessions.getStatus(sessionId);  // lightweight status poll
+await kyc.sessions.list({ page: 1, limit: 20, state: 'approved', search: 'user_123' });
 await kyc.sessions.waitForDecision(sessionId, { /* PollOptions */ });
 
 // Direct uploads (use the session_token as apiKey on a separate client, or from your frontend)
@@ -63,7 +64,35 @@ await kyc.sessions.uploadSelfie(sessionId, { file });
 await kyc.sessions.uploadAddress(sessionId, { file, documentType: 'UTILITY_BILL' });
 ```
 
-`file` accepts a `Blob`, `Buffer`, or Node `ReadableStream`.
+`file` accepts a `Blob`, `Buffer`, or Node `ReadableStream`. The full session
+result includes a `pep_check` block when PEP/sanctions screening is enabled on
+your account.
+
+## Verification links
+
+No-code shareable links that auto-create a session and launch the widget —
+ideal for onboarding over email, WhatsApp, or SMS.
+
+```typescript
+const link = await kyc.verificationLinks.create({
+  name: 'Customer Onboarding — 2026',
+  single_use: false,
+  redirect_url: 'https://your-app.com/verified',
+});
+console.log(link.url); // send this to your users
+
+await kyc.verificationLinks.list();
+await kyc.verificationLinks.get(link.id);
+await kyc.verificationLinks.update(link.id, { is_active: false });
+await kyc.verificationLinks.deactivate(link.id);
+```
+
+## Account
+
+```typescript
+await kyc.account.me();      // { merchant_id, name, pep_screening_enabled, created_at }
+await kyc.account.metrics(); // { total_sessions, approved, rejected, approval_rate, ... }
+```
 
 ## Webhooks
 

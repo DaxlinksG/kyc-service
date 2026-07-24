@@ -67,6 +67,16 @@ export interface RiskScore {
   };
 }
 
+export interface PepCheck {
+  status: 'PENDING' | 'DONE' | 'FAILED';
+  /** `clear` = no match · `pep_hit` = politically exposed → manual review · `sanctions_hit` = hard fail → rejected */
+  result?: 'clear' | 'pep_hit' | 'sanctions_hit' | null;
+  matched_name?: string | null;
+  /** `OFAC_SDN` or `UN_CONSOLIDATED` */
+  matched_list?: string | null;
+  match_score?: number | null;
+}
+
 export interface Session {
   id: string;
   state: SessionState;
@@ -78,6 +88,67 @@ export interface Session {
   selfie_check?: SelfieCheck;
   address_check?: AddressCheck;
   risk_score?: RiskScore;
+  /** Present only if the merchant has PEP/sanctions screening enabled. */
+  pep_check?: PepCheck;
+}
+
+/** Condensed row returned by `sessions.list()` (not the full detail object). */
+export interface SessionListItem {
+  id: string;
+  external_id?: string | null;
+  state: SessionState;
+  created_at: number;
+  updated_at: number;
+  doc_confidence?: number | null;
+  liveness_score?: number | null;
+  match_score?: number | null;
+  name_match_score?: number | null;
+}
+
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+export interface SessionList {
+  data: SessionListItem[];
+  pagination: Pagination;
+}
+
+export interface Metrics {
+  total_sessions: number;
+  sessions_today: number;
+  approved: number;
+  rejected: number;
+  manual_review: number;
+  processing: number;
+  in_progress: number;
+  /** approved ÷ (approved + rejected + manual_review), 0–1; 0 when none completed. */
+  approval_rate: number;
+}
+
+export interface MerchantInfo {
+  merchant_id: string;
+  name?: string | null;
+  pep_screening_enabled: boolean;
+  created_at?: number | null;
+}
+
+export interface VerificationLink {
+  id: string;
+  name: string;
+  /** The shareable URL to send to users. */
+  url: string | null;
+  slug: string;
+  is_active: boolean;
+  single_use: boolean;
+  sessions_created: number;
+  redirect_url?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at: number;
+  expires_at?: number | null;
 }
 
 export interface CreateSessionResponse {

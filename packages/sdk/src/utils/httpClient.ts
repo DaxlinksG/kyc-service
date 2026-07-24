@@ -18,12 +18,16 @@ export class HttpClient {
     return this.request<T>('POST', path, body);
   }
 
+  async patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, body);
+  }
+
   async postForm<T>(path: string, form: FormData): Promise<T> {
     return this.requestRaw<T>('POST', path, form);
   }
 
-  async delete(path: string): Promise<void> {
-    await this.request('DELETE', path);
+  async delete<T = void>(path: string): Promise<T> {
+    return this.request<T>('DELETE', path);
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

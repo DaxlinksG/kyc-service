@@ -2,6 +2,8 @@ import { HttpClient } from './utils/httpClient.js';
 import { Sessions } from './resources/Sessions.js';
 import { Webhooks } from './resources/Webhooks.js';
 import { ApiKeys } from './resources/ApiKeys.js';
+import { VerificationLinks } from './resources/VerificationLinks.js';
+import { Account } from './resources/Account.js';
 import { verifyWebhookSignature } from './utils/webhookVerifier.js';
 
 export interface KycClientOptions {
@@ -15,6 +17,8 @@ export class KycClient {
   readonly sessions: Sessions;
   readonly webhooks: Webhooks;
   readonly apiKeys: ApiKeys;
+  readonly verificationLinks: VerificationLinks;
+  readonly account: Account;
 
   private readonly http: HttpClient;
 
@@ -29,6 +33,8 @@ export class KycClient {
     this.sessions = new Sessions(this.http);
     this.webhooks = new Webhooks(this.http);
     this.apiKeys = new ApiKeys(this.http);
+    this.verificationLinks = new VerificationLinks(this.http);
+    this.account = new Account(this.http);
   }
 
   /**

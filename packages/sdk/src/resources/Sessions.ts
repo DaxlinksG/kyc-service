@@ -1,6 +1,15 @@
 import type { HttpClient } from '../utils/httpClient.js';
-import type { Session, CreateSessionResponse } from '../types/responses.js';
+import type { Session, CreateSessionResponse, SessionList, SessionState } from '../types/responses.js';
 import { pollUntilDecision, type PollOptions } from '../utils/polling.js';
+
+export interface ListSessionsOptions {
+  page?: number;
+  /** Results per page (max 100). */
+  limit?: number;
+  state?: SessionState;
+  /** Match against session ID or your external_id. */
+  search?: string;
+}
 
 export interface CreateSessionOptions {
   metadata?: Record<string, unknown>;
@@ -38,6 +47,17 @@ export class Sessions {
 
   async get(sessionId: string): Promise<Session> {
     return this.http.get<Session>(`/v1/sessions/${sessionId}`);
+  }
+
+  /** Paginated, filterable list of your sessions (newest first). */
+  async list(opts: ListSessionsOptions = {}): Promise<SessionList> {
+    const params = new URLSearchParams();
+    if (opts.page !== undefined) params.set('page', String(opts.page));
+    if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+    if (opts.state !== undefined) params.set('state', opts.state);
+    if (opts.search !== undefined && opts.search !== '') params.set('search', opts.search);
+    const qs = params.toString();
+    return this.http.get<SessionList>(`/v1/sessions${qs ? `?${qs}` : ''}`);
   }
 
   async getStatus(sessionId: string): Promise<Session> {
