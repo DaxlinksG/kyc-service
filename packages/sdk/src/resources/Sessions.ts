@@ -81,7 +81,9 @@ async function buildFormData(
   if (file instanceof Blob) {
     form.append('file', file, fileName);
   } else if (Buffer.isBuffer(file)) {
-    form.append('file', new Blob([file], { type: mimeType }), fileName);
+    // Copy into a fresh Uint8Array so the BlobPart is backed by a plain
+    // ArrayBuffer (a Node Buffer may sit on a SharedArrayBuffer, which Blob rejects).
+    form.append('file', new Blob([new Uint8Array(file)], { type: mimeType }), fileName);
   } else {
     // ReadableStream — collect chunks
     const chunks: Buffer[] = [];
@@ -89,7 +91,7 @@ async function buildFormData(
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
     const buffer = Buffer.concat(chunks);
-    form.append('file', new Blob([buffer], { type: mimeType }), fileName);
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), fileName);
   }
 
   return form;

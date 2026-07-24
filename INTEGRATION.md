@@ -372,11 +372,11 @@ Authorization: Bearer kyc_live_your_api_key
 ## SDK (TypeScript / Node.js)
 
 ```bash
-npm install @kyc/sdk
+npm install @zeehfi/kyc-sdk
 ```
 
 ```typescript
-import { KycClient } from '@kyc/sdk';
+import { KycClient } from '@zeehfi/kyc-sdk';
 
 const kyc = new KycClient({
   apiKey: process.env.KYC_API_KEY!,

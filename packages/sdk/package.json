@@ -1,22 +1,52 @@
 {
-  "name": "@kyc/sdk",
+  "name": "@zeehfi/kyc-sdk",
   "version": "1.0.0",
-  "description": "Official SDK for the KYC verification service",
+  "description": "Official TypeScript/Node.js SDK for the Zeeh KYC verification service — sessions, document uploads, webhooks, and signature verification.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "kyc",
+    "identity-verification",
+    "aml",
+    "onboarding",
+    "sdk",
+    "zeeh",
+    "webhooks"
+  ],
+  "homepage": "https://kyc.zeehfi.ca/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DaxlinksG/kyc-service.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/DaxlinksG/kyc-service/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

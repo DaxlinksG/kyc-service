@@ -20,7 +20,7 @@ export class KycClient {
 
   constructor(opts: KycClientOptions) {
     this.http = new HttpClient({
-      baseUrl: (opts.baseUrl ?? 'http://localhost:3000').replace(/\/$/, ''),
+      baseUrl: (opts.baseUrl ?? 'https://kyc.zeehfi.ca').replace(/\/$/, ''),
       apiKey: opts.apiKey,
       timeout: opts.timeout ?? 30_000,
       maxRetries: opts.maxRetries ?? 3,

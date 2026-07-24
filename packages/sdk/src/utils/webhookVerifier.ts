@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { KycApiError } from '../types/errors.js';
 
 /**
@@ -48,20 +48,8 @@ export function verifyWebhookSignature(
     throw new KycApiError('Signature mismatch', 'INVALID_SIGNATURE', 400);
   }
 
-  // Use timingSafeEqual if available (Node.js)
-  const { timingSafeEqual } = await import('crypto').then(m => m).catch(() => ({ timingSafeEqual: null }));
-  if (timingSafeEqual) {
-    if (!timingSafeEqual(expected, received)) {
-      throw new KycApiError('Signature mismatch', 'INVALID_SIGNATURE', 400);
-    }
-  } else {
-    let diff = 0;
-    for (let i = 0; i < expected.length; i++) {
-      diff |= (expected[i] ?? 0) ^ (received[i] ?? 0);
-    }
-    if (diff !== 0) {
-      throw new KycApiError('Signature mismatch', 'INVALID_SIGNATURE', 400);
-    }
+  if (!timingSafeEqual(expected, received)) {
+    throw new KycApiError('Signature mismatch', 'INVALID_SIGNATURE', 400);
   }
 
   return JSON.parse(body) as Record<string, unknown>;
