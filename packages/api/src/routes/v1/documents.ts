@@ -9,13 +9,14 @@ import { enqueueJob } from '../../workers/queue.js';
 import { getDb } from '../../db/client.js';
 import { env } from '../../config/env.js';
 import { DOCUMENT_TYPES, DOCUMENT_SIDES } from '../../config/constants.js';
-import { ValidationError } from '../../types/errors.js';
+import { multipartUploadSchema, skipBodyValidation, readUploadedFile } from '../../lib/multipartUpload.js';
 
 const sessionService = new SessionService();
 
 export default async function documentRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/sessions/:id/documents', {
     preHandler: [(app as any).verifySessionAuth],
+    validatorCompiler: skipBodyValidation,
     schema: {
       tags: ['Documents'],
       summary: 'Upload an identity document',
@@ -39,7 +40,26 @@ export default async function documentRoutes(app: FastifyInstance) {
           id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
         },
       },
-      // body schema omitted — multipart/form-data bypasses JSON body validation
+      body: multipartUploadSchema(
+        {
+          document_type: {
+            type: 'string',
+            enum: [...DOCUMENT_TYPES],
+            description: 'PASSPORT, NATIONAL_ID, or DRIVING_LICENSE',
+          },
+          side: {
+            type: 'string',
+            enum: [...DOCUMENT_SIDES],
+            default: 'FRONT',
+            description: 'FRONT (default) or BACK — upload BACK separately for ID cards / licenses.',
+          },
+          barcode_raw: {
+            type: 'string',
+            description: 'Optional AAMVA PDF417 barcode contents (North American DL/ID back).',
+          },
+        },
+        ['document_type'],
+      ),
       response: {
         202: {
           description: 'Document accepted and queued for processing',
@@ -56,16 +76,8 @@ export default async function documentRoutes(app: FastifyInstance) {
     const session = sessionService.getById(sessionId);
     sessionService.assertNotExpired(session);
 
-    const data = await (request as any).file();
-    if (!data) throw new ValidationError('No file uploaded');
-
-    const fileBuffer = await data.toBuffer();
-    await validateImageFile(fileBuffer, data.mimetype);
-
-    const formFields: Record<string, string> = {};
-    for (const [key, value] of Object.entries(data.fields ?? {})) {
-      formFields[key] = (value as any).value ?? value;
-    }
+    const { buffer: fileBuffer, mimetype, fields: formFields } = await readUploadedFile(request);
+    await validateImageFile(fileBuffer, mimetype);
 
     const fields = z.object({
       document_type: z.enum(DOCUMENT_TYPES),

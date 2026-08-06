@@ -9,13 +9,14 @@ import { enqueueJob } from '../../workers/queue.js';
 import { getDb } from '../../db/client.js';
 import { env } from '../../config/env.js';
 import { ADDRESS_DOCUMENT_TYPES } from '../../config/constants.js';
-import { ValidationError } from '../../types/errors.js';
+import { multipartUploadSchema, skipBodyValidation, readUploadedFile } from '../../lib/multipartUpload.js';
 
 const sessionService = new SessionService();
 
 export default async function addressRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/sessions/:id/address', {
     preHandler: [(app as any).verifySessionAuth],
+    validatorCompiler: skipBodyValidation,
     schema: {
       tags: ['Documents'],
       summary: 'Upload proof of address',
@@ -39,7 +40,16 @@ export default async function addressRoutes(app: FastifyInstance) {
           id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
         },
       },
-      // body schema omitted — multipart/form-data bypasses JSON body validation
+      body: multipartUploadSchema(
+        {
+          document_type: {
+            type: 'string',
+            enum: [...ADDRESS_DOCUMENT_TYPES],
+            description: 'UTILITY_BILL, BANK_STATEMENT, or GOVERNMENT_LETTER',
+          },
+        },
+        ['document_type'],
+      ),
       response: {
         202: {
           description: 'Address document accepted and queued for processing',
@@ -56,16 +66,8 @@ export default async function addressRoutes(app: FastifyInstance) {
     const session = sessionService.getById(sessionId);
     sessionService.assertNotExpired(session);
 
-    const data = await (request as any).file();
-    if (!data) throw new ValidationError('No file uploaded');
-
-    const fileBuffer = await data.toBuffer();
-    await validateImageFile(fileBuffer, data.mimetype);
-
-    const formFields: Record<string, string> = {};
-    for (const [key, value] of Object.entries(data.fields ?? {})) {
-      formFields[key] = (value as any).value ?? value;
-    }
+    const { buffer: fileBuffer, mimetype, fields: formFields } = await readUploadedFile(request);
+    await validateImageFile(fileBuffer, mimetype);
 
     const fields = z.object({
       document_type: z.enum(ADDRESS_DOCUMENT_TYPES),

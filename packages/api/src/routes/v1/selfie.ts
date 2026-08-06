@@ -8,12 +8,14 @@ import { enqueueJob } from '../../workers/queue.js';
 import { getDb } from '../../db/client.js';
 import { env } from '../../config/env.js';
 import { ValidationError } from '../../types/errors.js';
+import { multipartUploadSchema, skipBodyValidation, readUploadedFile } from '../../lib/multipartUpload.js';
 
 const sessionService = new SessionService();
 
 export default async function selfieRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/sessions/:id/selfie', {
     preHandler: [(app as any).verifySessionAuth],
+    validatorCompiler: skipBodyValidation,
     schema: {
       tags: ['Documents'],
       summary: 'Upload a selfie',
@@ -39,7 +41,7 @@ export default async function selfieRoutes(app: FastifyInstance) {
           id: { type: 'string', description: 'Session ID', example: 'ses_abc123' },
         },
       },
-      // body schema omitted — multipart/form-data bypasses JSON body validation
+      body: multipartUploadSchema(),
       response: {
         202: {
           description: 'Selfie accepted and queued for processing',
@@ -56,14 +58,11 @@ export default async function selfieRoutes(app: FastifyInstance) {
     const session = sessionService.getById(sessionId);
     sessionService.assertNotExpired(session);
 
-    const data = await (request as any).file();
-    if (!data) throw new ValidationError('No file uploaded');
-
-    const fileBuffer = await data.toBuffer();
+    const { buffer: fileBuffer, mimetype } = await readUploadedFile(request);
 
     // Selfie: images only (no PDF)
     if (fileBuffer[0] === 0x25) throw new ValidationError('PDF not allowed for selfie. Please upload an image.');
-    await validateImageFile(fileBuffer, data.mimetype);
+    await validateImageFile(fileBuffer, mimetype);
 
     const selfieId = `slf_${nanoid(12)}`;
     const relativePath = join(session.merchant_id, sessionId, `${selfieId}.jpg`);
