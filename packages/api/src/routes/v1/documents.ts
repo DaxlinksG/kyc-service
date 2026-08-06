@@ -20,13 +20,15 @@ export default async function documentRoutes(app: FastifyInstance) {
     schema: {
       tags: ['Documents'],
       summary: 'Upload an identity document',
-      description: `Upload a photo of the user's identity document. The service will extract text via OCR, parse the MRZ (Machine Readable Zone), and validate document authenticity.
+      description: `Upload a photo of the user's identity document. The service works with documents issued **anywhere in the world** — it extracts text via OCR, parses the MRZ (Machine Readable Zone) on passports and national IDs, and validates document authenticity.
+
+**Required form fields:** \`file\` (the image/PDF) and \`document_type\`.
 
 **Accepted document types:** PASSPORT, NATIONAL_ID, DRIVING_LICENSE
 
-**For NATIONAL_ID and DRIVING_LICENSE:** Upload the front first, then call this endpoint again with \`side=BACK\`.
+**For NATIONAL_ID and DRIVING_LICENSE:** Upload the front first (\`side=FRONT\`, the default), then call this endpoint again with \`side=BACK\`.
 
-**North American driver's licenses / provincial ID cards (Canada & US):** when uploading the \`BACK\`, include the AAMVA PDF417 barcode contents in the optional \`barcode_raw\` form field. This machine-readable data (name, DOB, document number, expiry, province) is used as the authoritative identity source. Decode it client-side from the barcode on the back of the card.
+**Optional — North American driver's licenses / ID cards (US & Canada only):** these carry an AAMVA PDF417 barcode on the back. If you can decode it client-side, pass its contents in the optional \`barcode_raw\` field when uploading the \`BACK\` — it is then used as the authoritative identity source. This is a North-America-specific enhancement; documents from every other country are read via OCR/MRZ and need no barcode.
 
 **Accepted file formats:** JPEG, PNG, PDF — max 10 MB.
 

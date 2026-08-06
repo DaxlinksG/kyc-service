@@ -11,7 +11,7 @@ export interface SessionStatus {
   document_check?: { id: string; status: string };
   selfie_check?: { id: string; status: string };
   address_check?: { id: string; status: string };
-  risk_score?: { score: number; decision: string };
+  risk_score?: { score: number; decision: string; reason?: string };
 }
 
 export interface LivenessSessionData {

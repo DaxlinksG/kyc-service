@@ -21,7 +21,7 @@ interface AppProps {
 
 export function App({ sessionToken, apiBaseUrl, onComplete, onError }: AppProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const [result, setResult] = useState<{ state: string; score?: number } | null>(null);
+  const [result, setResult] = useState<{ state: string; score?: number; reason?: string } | null>(null);
 
   const client = React.useMemo(
     () => new SessionClient(sessionToken, apiBaseUrl),
@@ -34,8 +34,8 @@ export function App({ sessionToken, apiBaseUrl, onComplete, onError }: AppProps)
     if (stepIndex < STEPS.length - 1) setStepIndex((i) => i + 1);
   };
 
-  const showResult = (state: string, score?: number) => {
-    setResult({ state, score });
+  const showResult = (state: string, score?: number, reason?: string) => {
+    setResult({ state, score, reason });
     setStepIndex(STEPS.indexOf('result'));
     onComplete(state);
   };
@@ -68,7 +68,7 @@ export function App({ sessionToken, apiBaseUrl, onComplete, onError }: AppProps)
         {step === 'selfie' && <SelfieStep client={client} onNext={advance} onError={onError} />}
         {step === 'address' && <AddressStep client={client} onNext={advance} onError={onError} />}
         {step === 'processing' && <ProcessingStep client={client} onResult={showResult} />}
-        {step === 'result' && result && <ResultStep state={result.state} onComplete={() => onComplete(result.state)} />}
+        {step === 'result' && result && <ResultStep state={result.state} reason={result.reason} onComplete={() => onComplete(result.state)} />}
       </div>
     </div>
   );

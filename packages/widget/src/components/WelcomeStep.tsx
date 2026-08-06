@@ -13,7 +13,7 @@ export function WelcomeStep({ onNext }: Props) {
         <li>Proof of address (utility bill or bank statement)</li>
       </ul>
       <p style={{ marginTop: 16, fontSize: 12 }}>
-        Your data is encrypted and processed securely. We never store raw video.
+        🌍 Available worldwide · Your data is encrypted and processed securely. We never store raw video.
       </p>
       <div className="kyc-actions">
         <button className="kyc-btn kyc-btn-primary" style={{ flex: 1 }} onClick={onNext}>

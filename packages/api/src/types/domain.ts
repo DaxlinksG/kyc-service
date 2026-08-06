@@ -61,6 +61,9 @@ export interface AddressCheckResult {
 export interface RiskScore {
   score: number;
   decision: 'approved' | 'rejected' | 'manual_review';
+  // Human-readable explanation of the governing decision factor. Present when the
+  // decision is rejected or manual_review, so testers/merchants/users see WHY.
+  reason?: string;
   factors: {
     documentConfidence: number;
     livenessScore: number;

@@ -29,16 +29,21 @@ const RESULTS: Record<string, { svg: string; title: string; msg: string; btnLabe
 
 interface ResultStepProps {
   state: string;
+  reason?: string;
   onComplete: () => void;
 }
 
-export function ResultStep({ state, onComplete }: ResultStepProps) {
+export function ResultStep({ state, reason, onComplete }: ResultStepProps) {
   const c = RESULTS[state] ?? RESULTS['rejected']!;
+  // Prefer the server's specific reason (e.g. "The selfie doesn't match the ID")
+  // over the generic per-state copy, so the user knows exactly what happened.
+  // Approved never needs a reason.
+  const message = state !== 'approved' && reason ? reason : c.msg;
   return (
     <div className="kyc-result-center">
       <div className="kyc-result-icon" dangerouslySetInnerHTML={{ __html: c.svg }} />
       <h2>{c.title}</h2>
-      <p style={{ marginTop: 10, color: 'var(--kyc-text-muted)', lineHeight: 1.5 }}>{c.msg}</p>
+      <p style={{ marginTop: 10, color: 'var(--kyc-text-muted)', lineHeight: 1.5 }}>{message}</p>
       <button
         className="kyc-btn kyc-btn-primary"
         style={{ marginTop: 24 }}

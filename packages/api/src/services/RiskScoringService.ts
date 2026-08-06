@@ -4,6 +4,27 @@ import type { RiskScore } from '../types/domain.js';
 import { selectBestIdentityDoc } from '../lib/identityDoc.js';
 import { env } from '../config/env.js';
 
+// Human-readable explanations, keyed by hard-fail code. Surfaced to testers,
+// merchants, and end users so a rejection/review is never an opaque dead end.
+const HARD_FAIL_REASONS: Record<string, string> = {
+  expired_document: 'The identity document has expired.',
+  no_face_in_selfie: 'No face could be detected in the selfie.',
+  document_unreadable: "The identity document couldn't be read clearly. A reviewer will verify it manually.",
+  liveness_check_failed: "The liveness check didn't pass — please retake the selfie in good lighting.",
+  face_mismatch: "The selfie doesn't match the face on the identity document.",
+  passport_no_mrz: "The passport's machine-readable zone couldn't be read. A reviewer will verify it manually.",
+  sanctions_hit: 'The applicant matched a sanctions or watchlist record.',
+  duplicate_face: 'This face is already linked to a different verified identity.',
+};
+
+// Quality / capture failures are NOT evidence of fraud — an OCR miss or an
+// unreadable MRZ on an otherwise-genuine document should go to a human reviewer,
+// never an automatic rejection. Everything else (mismatched face, sanctions,
+// duplicate identity, expired doc, failed liveness) is substantive and still
+// auto-rejects. This is stricter coverage (adds human oversight), not relaxed
+// security: a real fraud signal never gets downgraded to review.
+const QUALITY_HARD_FAILS = new Set(['document_unreadable', 'passport_no_mrz']);
+
 export class RiskScoringService {
   score(sessionId: string): RiskScore {
     const db = getDb();
@@ -95,8 +116,20 @@ export class RiskScoringService {
           matchScore * 0.25 +
           effectiveAddressForScore * 0.10;
 
+    // Separate substantive fraud signals from recoverable capture/quality problems.
+    const securityFails = hardFails.filter((f) => !QUALITY_HARD_FAILS.has(f));
+    const qualityFails = hardFails.filter((f) => QUALITY_HARD_FAILS.has(f));
+
     let decision: RiskScore['decision'];
-    if (baseScore >= env.RISK_APPROVE_THRESHOLD) {
+    if (securityFails.length > 0) {
+      // A real fraud signal — reject.
+      decision = 'rejected';
+    } else if (qualityFails.length > 0) {
+      // Document couldn't be read, but nothing substantive failed (e.g. the face
+      // still matched and liveness passed). Route to a human instead of rejecting
+      // a potentially genuine applicant.
+      decision = 'manual_review';
+    } else if (baseScore >= env.RISK_APPROVE_THRESHOLD) {
       decision = 'approved';
     } else if (baseScore >= env.RISK_MANUAL_THRESHOLD) {
       decision = 'manual_review';
@@ -109,9 +142,24 @@ export class RiskScoringService {
       decision = 'manual_review';
     }
 
+    // Governing reason: the first hard fail explains a reject/review directly; a
+    // low-score reject/review without a hard fail gets a generic score explanation.
+    const governingFail = securityFails[0] ?? qualityFails[0];
+    let reason: string | undefined;
+    if (governingFail) {
+      reason = HARD_FAIL_REASONS[governingFail] ?? 'The verification could not be completed automatically.';
+    } else if (decision === 'manual_review') {
+      reason = pepCheck?.result === 'pep_hit'
+        ? 'The applicant matched a politically-exposed-person record and needs a manual review.'
+        : 'The verification needs a manual review before it can be approved.';
+    } else if (decision === 'rejected') {
+      reason = 'The verification did not meet the required confidence to be approved.';
+    }
+
     return {
       score: Math.round(baseScore * 100) / 100,
       decision,
+      ...(reason ? { reason } : {}),
       factors: {
         documentConfidence,
         livenessScore,

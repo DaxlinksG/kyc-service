@@ -3,7 +3,7 @@ import type { SessionClient } from '../api/sessionClient.js';
 
 interface Props {
   client: SessionClient;
-  onResult: (state: string, score?: number) => void;
+  onResult: (state: string, score?: number, reason?: string) => void;
 }
 
 const POLL_MS = 3000;
@@ -19,7 +19,7 @@ export function ProcessingStep({ client, onResult }: Props) {
       try {
         const status = await client.getStatus();
         if (TERMINAL.has(status.state)) {
-          onResult(status.state, status.risk_score?.score);
+          onResult(status.state, status.risk_score?.score, status.risk_score?.reason);
           return;
         }
         if (Date.now() < deadline) {

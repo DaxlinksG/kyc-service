@@ -103,6 +103,7 @@ const sessionDetailSchema = {
       description: 'Only present when state is `approved`, `rejected`, or `manual_review`.',
       properties: {
         decision: { type: 'string', enum: ['approved', 'rejected', 'manual_review'] },
+        reason: { type: 'string', description: 'Human-readable explanation of a rejected/manual_review decision. Absent when approved.' },
         score: { type: 'number', description: 'Weighted aggregate 0–1. ≥ 0.80 = approved · 0.55–0.79 = manual_review · < 0.55 = rejected.' },
         factors: {
           type: 'object',

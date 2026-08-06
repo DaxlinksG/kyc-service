@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { SessionClient } from '../api/sessionClient.js';
 import { initBarcodeScanner, scanPdf417 } from '../lib/barcodeScanner.js';
+import { COUNTRIES, flagEmoji, AAMVA_BARCODE_COUNTRIES } from '../lib/countries.js';
 
 interface Props {
   client: SessionClient;
@@ -11,18 +12,19 @@ interface Props {
 
 const DOC_TYPES = [
   { id: 'PASSPORT', icon: '🛂', label: 'Passport' },
-  { id: 'NATIONAL_ID', icon: '🪪', label: 'National / Provincial ID' },
+  { id: 'NATIONAL_ID', icon: '🪪', label: 'National ID' },
   { id: 'DRIVING_LICENSE', icon: '🚗', label: "Driver's License" },
 ] as const;
 
-// Document types that have a back side worth capturing. North American driver's
-// licenses and provincial ID cards carry an AAMVA PDF417 barcode on the back,
-// which we scan client-side for authoritative identity data.
+// Document types that MAY have a scannable barcode on the back. Only North
+// American driver's licenses / ID cards actually carry an AAMVA PDF417 barcode,
+// so the back-scan step is additionally gated on the selected country below.
 const DOCS_WITH_BACK = new Set(['NATIONAL_ID', 'DRIVING_LICENSE']);
 
 type Phase = 'front' | 'back';
 
 export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
+  const [country, setCountry] = useState<string>('');
   const [docType, setDocType] = useState<string>('PASSPORT');
   const [phase, setPhase] = useState<Phase>('front');
   const [mode, setMode] = useState<'camera' | 'upload'>('camera');
@@ -40,7 +42,11 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
   const scanBusyRef = useRef(false);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const requiresBack = DOCS_WITH_BACK.has(docType);
+  // A back scan is only meaningful for North American licenses/ID cards, which
+  // carry an AAMVA PDF417 barcode. For every other country the front image + OCR
+  // is authoritative, so we don't send the user through a barcode step that can't
+  // apply to their document.
+  const requiresBack = DOCS_WITH_BACK.has(docType) && AAMVA_BARCODE_COUNTRIES.has(country);
   const scanningBack = phase === 'back' && requiresBack;
 
   useEffect(() => {
@@ -75,7 +81,6 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
   };
 
   useEffect(() => {
-    startCamera();
     return () => {
       stopCamera();
       // Cancel an in-flight countdown so its callback can't run captureFrame()
@@ -178,6 +183,13 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
     if (phase === 'back') setBarcodeRaw(null);
   };
 
+  const selectCountry = (code: string) => {
+    setCountry(code);
+    // Camera is deferred until an issuing country is chosen — kick it off now so
+    // the applicant lands straight on a live viewfinder once they've picked.
+    if (code && mode === 'camera' && !capturedFile) startCamera();
+  };
+
   const selectDocType = (id: string) => {
     if (id === docType) return;
     setDocType(id);
@@ -229,8 +241,11 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
   };
 
   const heading = phase === 'front' ? 'ID Document' : 'Back of Card';
+  const needsCountry = phase === 'front' && !country;
   const subheading = phase === 'front'
-    ? 'Select your document type, then scan or upload a clear photo.'
+    ? (needsCountry
+        ? 'Verification is available worldwide. Tell us where your document was issued to begin.'
+        : 'Select your document type, then scan or upload a clear photo.')
     : 'If your card has a barcode on the back, show it — we scan it automatically. No barcode? Skip this step below.';
 
   return (
@@ -239,6 +254,25 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
       <p>{subheading}</p>
 
       {phase === 'front' && (
+        <label className="kyc-field">
+          <span className="kyc-field-label">Issuing country</span>
+          <div className="kyc-select-wrap">
+            <span className="kyc-select-flag">{country ? flagEmoji(country) : '🌍'}</span>
+            <select
+              className="kyc-select"
+              value={country}
+              onChange={(e) => selectCountry(e.target.value)}
+            >
+              <option value="" disabled>Select country…</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        </label>
+      )}
+
+      {phase === 'front' && !needsCountry && (
         <div className="kyc-doc-grid">
           {DOC_TYPES.map((d) => (
             <div
@@ -253,7 +287,7 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
         </div>
       )}
 
-      {mode === 'camera' && (
+      {!needsCountry && mode === 'camera' && (
         <div className="kyc-capture-area">
           <video
             ref={videoRef}
@@ -289,12 +323,13 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
         </div>
       )}
 
-      {mode === 'upload' && (
+      {!needsCountry && mode === 'upload' && (
         <UploadZone onFile={handleUploadFile} file={capturedFile} accept="image/*" hint="JPG, PNG or WebP · max 20MB" />
       )}
 
       {error && <div className="kyc-error-banner">{error}</div>}
 
+      {!needsCountry && (
       <div className="kyc-actions">
         {!showCanvas && (
           <button className="kyc-btn kyc-btn-secondary" style={{ flexShrink: 0 }} onClick={toggleMode}>
@@ -318,6 +353,7 @@ export function DocumentStep({ client, apiBaseUrl, onNext, onError }: Props) {
           {uploading ? 'Uploading…' : 'Continue →'}
         </button>
       </div>
+      )}
 
       {/* Not every card has a scannable barcode (e.g. a Nigerian National ID or
           driver's license). Let those users skip the back step rather than forcing
