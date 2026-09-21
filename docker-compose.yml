@@ -44,6 +44,9 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - certbot_www:/var/www/certbot:ro
       - certbot_conf:/etc/letsencrypt:ro
+    # Reload every 6h so renewed certbot certs are picked up without a manual restart.
+    # certbot runs in a separate container and cannot signal nginx directly.
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
     depends_on:
       - api
 
